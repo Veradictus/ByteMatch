@@ -40,7 +40,7 @@ const fmt = new Intl.NumberFormat("en-US");
 const bytes = (n: number) =>
   n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(2)} MB` : n >= 1024 ? `${(n / 1024).toFixed(1)} KB` : `${n} B`;
 
-// ---- Tile shading: one hue per state, lit from the centre and falling off to the edges. ----
+// Flat colors distinguish matched, in-progress and untouched code.
 
 type Rgb = [number, number, number];
 const hex = (c: Rgb) =>
@@ -52,12 +52,11 @@ const hex = (c: Rgb) =>
     )
     .join("")}`;
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-const scale = (c: Rgb, k: number): Rgb => [c[0] * k, c[1] * k, c[2] * k];
 
-const DONE: Rgb = [31, 168, 64];
-const IDLE: Rgb = [46, 55, 72];
-const BLUE_LOW: Rgb = [14, 58, 104];
-const BLUE_HIGH: Rgb = [37, 134, 214];
+const DONE: Rgb = [57, 131, 109];
+const IDLE: Rgb = [73, 80, 84];
+const BLUE_LOW: Rgb = [54, 79, 100];
+const BLUE_HIGH: Rgb = [111, 152, 180];
 
 function baseColor(matched: number, fuzzy: number): Rgb {
   if (matched >= 100) return DONE;
@@ -66,8 +65,7 @@ function baseColor(matched: number, fuzzy: number): Rgb {
 }
 
 function shade(matched: number, fuzzy: number): string {
-  const base = baseColor(matched, fuzzy);
-  return `radial-gradient(ellipse 85% 85% at 50% 42%, ${hex(scale(base, 1.18))} 0%, ${hex(base)} 52%, ${hex(scale(base, 0.62))} 100%)`;
+  return hex(baseColor(matched, fuzzy));
 }
 
 const LEGEND = [

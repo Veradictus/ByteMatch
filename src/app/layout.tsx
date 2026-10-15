@@ -5,6 +5,7 @@ import Link from "next/link";
 import { currentSession } from "@/auth/session";
 import { JsonLd } from "@/components/json-ld";
 import { MobileMenu } from "@/components/mobile-menu";
+import { SiteLinks } from "@/components/site-links";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { siteJsonLd, siteMetadata } from "@/lib/seo";
 import { config } from "@/lib/config";
@@ -20,7 +21,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const session = await currentSession().catch(() => null);
   const name = config().SITE_NAME;
   const discord = config().SITE_DISCORD_URL.trim();
-  const navLink = "rounded-control px-3 py-1.5 text-xl text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink";
+  const navLink = "rounded-control px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink";
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
@@ -39,25 +40,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="site-header">
           <nav className="site-container site-nav" aria-label="Main navigation">
             <Link href="/" className="site-brand">
+              <svg className="brand-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v3h-5v5h-3z" />
+              </svg>
               {name === "ByteMatch" ? "bytematch.dev" : name}
             </Link>
-            <span className="nav-divider" aria-hidden="true">
-              /
-            </span>
-            <div className="hidden items-center gap-1 md:flex">
-              <Link href="/" className={navLink}>
-                Projects
-              </Link>
-              <Link href="/games" className={navLink}>
-                Games
-              </Link>
-              <Link href="/activity" className={navLink}>
-                Activity
-              </Link>
-              <Link href="/docs" className={navLink}>
-                Docs
-              </Link>
-            </div>
+            <SiteLinks />
             <div className="ml-auto hidden items-center gap-1 md:flex">
               {session ? (
                 <>

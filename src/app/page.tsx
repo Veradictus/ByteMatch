@@ -48,17 +48,22 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
   const from = page.total ? (page.page - 1) * PER_PAGE + 1 : 0;
 
   return (
-    <div>
-      <h1 className="index-heading">Progress Reports</h1>
-      <blockquote className="index-intro">
-        <p>
-          Matching decompilation rebuilds a program from source until the compiled code matches the original binary. Follow the progress of
-          community projects below.
-        </p>
-        <Link href="/docs">Learn about matching decompilation</Link>
-      </blockquote>
+    <div className="project-directory">
+      <header className="directory-heading">
+        <div>
+          <p className="directory-kicker">Matching decompilation</p>
+          <h1 className="index-heading">Project directory</h1>
+        </div>
+        <div className="directory-intro">
+          <p>Following the work of rebuilding games from source, one matching function at a time.</p>
+          <Link href="/manage/new">
+            Add your project <span aria-hidden="true">&#8599;</span>
+          </Link>
+          <Link href="/docs">How it works</Link>
+        </div>
+      </header>
       <ProjectFilters params={params} platforms={platforms} />
-      <p className="mb-3 text-xs text-ink-3" aria-live="polite">
+      <p className="directory-count" aria-live="polite">
         {page.total === 0
           ? filtered
             ? "No projects match."

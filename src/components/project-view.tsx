@@ -325,18 +325,29 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
               <ProjectHero name={project.name} manualUrl={project.imageUrl} kind="report" />
             </Suspense>
             <div className="p-6 sm:p-7">
-              <div className="flex items-start gap-4">
-                {project.iconUrl ? (
-                  <ExternalImage src={project.iconUrl} className="size-14 shrink-0 rounded-xl border border-line object-cover sm:size-16" />
-                ) : null}
-                <h1 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-                  {project.name} is {m.matched_code_percent.toFixed(2)}% decompiled
-                </h1>
+              <div className="report-title-row">
+                <div className="flex min-w-0 items-center gap-4">
+                  {project.iconUrl ? (
+                    <ExternalImage src={project.iconUrl} className="size-14 shrink-0 border border-line object-cover" />
+                  ) : null}
+                  <div className="min-w-0">
+                    <p className="directory-kicker">Progress report</p>
+                    <h1 className="font-semibold text-balance">{project.name}</h1>
+                    <p className="mt-2 text-sm text-ink-3">
+                      {project.platform ? `${platformName(project.platform)} / ` : ""}
+                      {r.version}
+                    </p>
+                  </div>
+                </div>
+                <div className="report-total">
+                  <strong>
+                    {m.matched_code_percent.toFixed(2)}
+                    <small>%</small>
+                  </strong>
+                  <span>code matched</span>
+                  <span>{m.complete_code_percent.toFixed(2)}% fully linked</span>
+                </div>
               </div>
-              <p className="mt-1 text-base font-medium text-ink-3">
-                {m.complete_code_percent.toFixed(2)}% fully linked
-                {project.platform ? <span className="font-normal"> · {platformName(project.platform)}</span> : null}
-              </p>
 
               <div className="report-bars mt-6">
                 <ProgressSection

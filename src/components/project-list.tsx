@@ -28,57 +28,79 @@ export interface ProjectRow {
 const fmt = new Intl.NumberFormat("en-US");
 const date = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
 
-/** Full-width cards use the actual report measures; missing reports remain visibly pending. */
+/** A project directory with comparable progress and report details on each row. */
 export function ProjectList({ rows, empty }: { rows: ProjectRow[]; empty: React.ReactNode }) {
   return (
     <ul className="project-cards">
       {rows.map((r) => (
         <li key={`${r.owner}/${r.repo}`}>
           <article className="project-card">
+            <div className="project-card-header">
+              <div className="project-platform">
+                <PlatformMark platform={r.platform} />
+              </div>
+              <div className="project-identity">
+                <p className="project-repository">
+                  {r.owner}/{r.repo}
+                </p>
+                <h2>
+                  <Link href={`/${r.owner}/${r.repo}`} className="project-card-link">
+                    {r.name}
+                  </Link>
+                </h2>
+                <p className="project-edition">
+                  {r.platformName ?? "Other platform"}
+                  {r.version ? ` \u00b7 ${r.version}` : ""}
+                </p>
+              </div>
+            </div>
+            <div className="project-progress">
+              <div className="project-progress-heading">
+                <p className="project-card-percent">
+                  {r.codePercent === null ? (
+                    <span>Awaiting report</span>
+                  ) : (
+                    <>
+                      <strong>
+                        {r.codePercent.toFixed(2)}
+                        <small>%</small>
+                      </strong>
+                      <span>matched</span>
+                    </>
+                  )}
+                </p>
+                {r.gain30 != null && Math.abs(r.gain30) >= 0.01 ? (
+                  <span className={`project-gain ${r.gain30 > 0 ? "text-good" : "text-bad"}`} title="Percentage points changed in 30 days">
+                    {r.gain30 > 0 ? "+" : ""}
+                    {r.gain30.toFixed(2)} <span>/ 30d</span>
+                  </span>
+                ) : null}
+              </div>
+              {r.codePercent !== null ? (
+                <MatchProgress
+                  matched={r.codePercent}
+                  linked={r.linkedPercent ?? 0}
+                  fuzzy={r.fuzzyPercent ?? 0}
+                  label={`${r.name}: code matched`}
+                />
+              ) : (
+                <div className="match-track" aria-hidden="true" />
+              )}
+              <div className="project-card-meta">
+                {r.functions ? (
+                  <span>
+                    {fmt.format(r.functions.done)} / {fmt.format(r.functions.total)} functions
+                  </span>
+                ) : (
+                  <span>Waiting for the first report</span>
+                )}
+                {r.linkedPercent ? <span>{r.linkedPercent.toFixed(2)}% linked</span> : null}
+                {r.updated ? <time dateTime={r.updated}>Updated {date.format(new Date(r.updated))}</time> : null}
+              </div>
+            </div>
             <Suspense fallback={null}>
               <ProjectHero name={r.name} manualUrl={r.image} kind="card" />
             </Suspense>
-            <div className="project-card-header">
-              <h2>
-                <Link href={`/${r.owner}/${r.repo}`} className="project-card-link">
-                  {r.name}
-                </Link>
-              </h2>
-              <PlatformMark platform={r.platform} />
-            </div>
-            <p className="project-card-percent">
-              {r.codePercent === null ? "Awaiting report" : `${r.codePercent.toFixed(2)}% decompiled`}
-              {r.linkedPercent ? ` | ${r.linkedPercent.toFixed(2)}% fully linked` : ""}
-            </p>
-            {r.codePercent !== null ? (
-              <MatchProgress
-                matched={r.codePercent}
-                linked={r.linkedPercent ?? 0}
-                fuzzy={r.fuzzyPercent ?? 0}
-                label={`${r.name}: code matched`}
-              />
-            ) : (
-              <div className="match-track" aria-hidden="true" />
-            )}
-            <div className="project-card-meta">
-              {r.updated ? (
-                <time dateTime={r.updated}>Updated {date.format(new Date(r.updated))}</time>
-              ) : (
-                <span>Waiting for the first report</span>
-              )}
-              {r.functions ? (
-                <span>
-                  {fmt.format(r.functions.done)} / {fmt.format(r.functions.total)} functions
-                </span>
-              ) : null}
-              {r.version ? <span>{r.version}</span> : null}
-              {r.gain30 != null && Math.abs(r.gain30) >= 0.01 ? (
-                <span className={r.gain30 > 0 ? "text-good" : "text-bad"} title="Percentage points changed in 30 days">
-                  {r.gain30 > 0 ? "+" : ""}
-                  {r.gain30.toFixed(2)} in 30 days
-                </span>
-              ) : null}
-            </div>
           </article>
         </li>
       ))}
