@@ -14,6 +14,7 @@ import { NotFound, repoUrl, resolve } from "@/lib/project-data";
 import { formatBytes } from "@/report/measures";
 import { CopyField } from "./copy-field";
 import { ExternalImage } from "./external-image";
+import { ProjectHero } from "./project-hero";
 import { Chat, ChevronRight, GitHubMark } from "./ui/icons";
 import { VersionSelect } from "./version-select";
 import { HistoryChart, type HistoryPoint } from "./history-chart";
@@ -64,27 +65,32 @@ function More({ title, children, aside }: { title: string; children: React.React
 function Syncing({ project }: { project: Project }) {
   return (
     <div className="mx-auto max-w-2xl">
-      <section className="panel p-7">
-        <h1 className="text-2xl font-semibold tracking-tight text-balance">{project.name}</h1>
-        <div className="mt-1 text-sm text-ink-3">
-          <a href={repoUrl(project)} className="hover:text-ink">
-            {project.owner}/{project.repo}
-          </a>
-          {project.platform ? ` · ${platformName(project.platform)}` : ""}
-        </div>
-        <p className="mt-6 text-sm leading-relaxed text-ink-2">
-          No progress reports yet. ByteMatch imports the project&apos;s decomp.dev history, if it had one, and reads its CI runs on{" "}
-          <code className="rounded bg-code px-1.5 py-0.5 font-mono text-xs">{project.defaultBranch}</code> for{" "}
-          <code className="rounded bg-code px-1.5 py-0.5 font-mono text-xs">{"<VERSION>_report"}</code> artifacts. This usually takes a
-          minute or two.
-        </p>
-        {project.lastError ? (
-          <p className="mt-4 rounded-xl border border-bad/40 bg-bad/5 px-4 py-3 text-sm text-bad">{publicError(project.lastError)}</p>
-        ) : project.lastPolledAt ? (
-          <p className="mt-4 text-sm text-ink-3">
-            Last checked <LocalTime value={project.lastPolledAt} />: no report artifacts found yet.
+      <section className="panel overflow-hidden">
+        <Suspense fallback={null}>
+          <ProjectHero name={project.name} manualUrl={project.imageUrl} kind="report" />
+        </Suspense>
+        <div className="p-7">
+          <h1 className="text-2xl font-semibold tracking-tight text-balance">{project.name}</h1>
+          <div className="mt-1 text-sm text-ink-3">
+            <a href={repoUrl(project)} className="hover:text-ink">
+              {project.owner}/{project.repo}
+            </a>
+            {project.platform ? ` · ${platformName(project.platform)}` : ""}
+          </div>
+          <p className="mt-6 text-sm leading-relaxed text-ink-2">
+            No progress reports yet. ByteMatch imports the project&apos;s decomp.dev history, if it had one, and reads its CI runs on{" "}
+            <code className="rounded bg-code px-1.5 py-0.5 font-mono text-xs">{project.defaultBranch}</code> for{" "}
+            <code className="rounded bg-code px-1.5 py-0.5 font-mono text-xs">{"<VERSION>_report"}</code> artifacts. This usually takes a
+            minute or two.
           </p>
-        ) : null}
+          {project.lastError ? (
+            <p className="mt-4 rounded-xl border border-bad/40 bg-bad/5 px-4 py-3 text-sm text-bad">{publicError(project.lastError)}</p>
+          ) : project.lastPolledAt ? (
+            <p className="mt-4 text-sm text-ink-3">
+              Last checked <LocalTime value={project.lastPolledAt} />: no report artifacts found yet.
+            </p>
+          ) : null}
+        </div>
       </section>
     </div>
   );
@@ -131,10 +137,10 @@ function ProgressSection({
 }) {
   const stripes = (a: string, b: string) => `repeating-linear-gradient(135deg, ${a} 0 7px, ${b} 7px 14px)`;
   const solid = tone === "data" ? "var(--series-1)" : "var(--done)";
-  const done = tone === "data" ? stripes("var(--series-1)", "#2b6dbf") : stripes("var(--done)", "#25863d");
-  const faint = stripes("#3b4a63", "#2c3850");
+  const done = linked > 0 ? stripes(solid, `color-mix(in srgb, ${solid} 70%, var(--surface))`) : solid;
+  const faint = stripes("var(--partial)", "color-mix(in srgb, var(--partial) 55%, var(--surface))");
   const of = (bytes: number) => `${fmtInt.format(Math.round(bytes))} of ${fmtInt.format(total)} bytes (${formatBytes(Math.round(bytes))})`;
-  const l = Math.min(100, linked);
+  const l = Math.max(0, Math.min(100, Number.isFinite(linked) ? linked : 0));
   const mt = Math.max(0, Math.min(100, matched) - l);
   const fz = fuzzy === undefined ? 0 : Math.max(0, Math.min(100, fuzzy) - l - mt);
   const layers: Layer[] = [
@@ -177,7 +183,7 @@ function ProgressSection({
         {label} <span className="text-ink-3">({formatBytes(total)})</span>
       </div>
       <div className="relative">
-        <div className="flex h-4 w-full overflow-hidden rounded-full bg-track" aria-hidden>
+        <div className="report-meter flex w-full overflow-hidden bg-track" aria-hidden>
           {layers.map((layer) => (
             <div key={layer.key} className="h-full" style={{ width: `${layer.width}%`, background: layer.background }} />
           ))}
@@ -189,7 +195,7 @@ function ProgressSection({
               key={layer.key}
               tabIndex={0}
               aria-label={`${label}, ${layer.label}: ${layer.detail}`}
-              className="group absolute -top-1 h-6 cursor-default rounded outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+              className="report-meter-target group absolute -top-1 cursor-default rounded outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
               // At least 10px wide so thin layers can be pointed at; centred on the layer.
               style={{
                 left: `calc(${layer.from + layer.width / 2}% - max(5px, ${layer.width / 2}%))`,
@@ -277,7 +283,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
   const navOff = "btn h-9 flex-1 cursor-not-allowed border border-line px-3 text-sm text-ink-3 opacity-50";
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
+    <div className="report-page grid grid-cols-[minmax(0,1fr)] gap-5">
       <JsonLd data={projectJsonLd(projectSeoInput(r, { versionInUrl: !!version, importedFromDecompDev: imported }))} />
 
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm">
@@ -312,12 +318,12 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
         </a>
       </nav>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(0,1fr)_23rem]">
+      <div className="report-workspace">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
-          <section className="panel overflow-hidden">
-            {project.imageUrl ? (
-              <ExternalImage src={project.imageUrl} className="aspect-[3/1] max-h-56 w-full border-b border-line object-cover" />
-            ) : null}
+          <section className="report-summary panel overflow-hidden">
+            <Suspense fallback={null}>
+              <ProjectHero name={project.name} manualUrl={project.imageUrl} kind="report" />
+            </Suspense>
             <div className="p-6 sm:p-7">
               <div className="flex items-start gap-4">
                 {project.iconUrl ? (
@@ -332,7 +338,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
                 {project.platform ? <span className="font-normal"> · {platformName(project.platform)}</span> : null}
               </p>
 
-              <div className="mt-6 grid gap-5">
+              <div className="report-bars mt-6">
                 <ProgressSection
                   label="Code"
                   total={m.total_code}
@@ -431,7 +437,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
           ) : null}
         </div>
 
-        <aside className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:sticky xl:top-20" aria-label="Project details">
+        <aside className="report-details" aria-label="Project details">
           <Side title="Details">
             <div className="grid grid-cols-2 gap-x-4 gap-y-4">
               <Stat

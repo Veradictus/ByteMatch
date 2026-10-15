@@ -42,6 +42,10 @@ Settings are environment variables. Copy `.env.example` to `.env`; the file is r
 Sign-in needs `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` and `SECRET_KEY`. Webhooks, PR comments and
 installation tokens need `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` and `GITHUB_WEBHOOK_SECRET`.
 
+## Automatic game artwork
+
+Set `STEAMGRIDDB_API_KEY` to enable automatic hero images. Manually configured images take priority.
+
 ## Deploying with pm2
 
 ```sh

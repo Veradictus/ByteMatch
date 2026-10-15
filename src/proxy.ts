@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /** First path segments that belong to the site, never to a project owner. */
 const RESERVED = new Set([
+  "platforms",
   "api",
   "auth",
   "manage",

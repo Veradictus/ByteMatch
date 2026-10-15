@@ -283,7 +283,7 @@ export function UnitMap({
 
       <div
         ref={grid}
-        className="relative w-full overflow-hidden rounded-xl border border-line bg-bg"
+        className="report-map relative w-full overflow-hidden border border-line bg-bg"
         style={{ height: "clamp(360px, calc(100vh - 360px), 720px)" }}
         onMouseLeave={() => setFocus(null)}
       >

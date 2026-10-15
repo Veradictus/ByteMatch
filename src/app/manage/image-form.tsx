@@ -48,7 +48,7 @@ export function ImageForm({
                 ? "The link must start with https://."
                 : shape === "square"
                   ? "No icon"
-                  : "No cover. Paste a link to a wide banner (about 1500 × 500)."}
+                  : "Automatic artwork is used when configured. Paste a link to choose your own cover."}
           </div>
         ) : null}
       </div>
@@ -72,7 +72,7 @@ export function ImageForm({
       </label>
       <div className="flex flex-wrap items-center gap-3">
         <button disabled={pending || (trimmed !== "" && status !== "ok")} className="btn btn-primary">
-          {pending ? "Saving…" : trimmed ? `Save ${what}` : `Remove ${what}`}
+          {pending ? "Saving…" : trimmed ? `Save ${what}` : shape === "wide" ? "Use automatic cover" : `Remove ${what}`}
         </button>
         {state.error ? (
           <p className="text-sm text-bad">{state.error}</p>

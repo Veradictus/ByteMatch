@@ -168,7 +168,13 @@ export async function setImageUrl(owner: string, repo: string, kind: "cover" | "
   revalidatePath(`/${owner}/${repo}`);
   revalidatePath("/");
   const what = kind === "icon" ? "Icon" : "Cover";
-  return { message: checked.url ? `${what} saved.` : `${what} removed.` };
+  return {
+    message: checked.url
+      ? `${what} saved.`
+      : kind === "cover"
+        ? "Manual cover cleared. Automatic artwork will be used when configured and available."
+        : `${what} removed.`,
+  };
 }
 
 /** Adds an uploaded history file (decomp.dev's mode=history JSON) to one version's history. */

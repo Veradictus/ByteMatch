@@ -2,9 +2,7 @@ import Link from "next/link";
 import { Pagination } from "@/components/pagination";
 import { ProjectFilters } from "@/components/project-filters";
 import { ProjectList, type ProjectRow } from "@/components/project-list";
-import { Plus } from "@/components/ui/icons";
 import { projectIndex } from "@/db/store";
-import { config } from "@/lib/config";
 import { platformName } from "@/lib/platforms";
 import { filterAndSort, paginate, parseListParams } from "@/lib/project-query";
 import { homeMetadata } from "@/lib/seo";
@@ -37,7 +35,9 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
     totalCode: p.measures ? Number(p.measures.total_code) : null,
     gain30: p.gain_30d === null ? null : Number(p.gain_30d),
     createdAt: new Date(p.created_at).toISOString(),
-    image: p.icon_url,
+    image: p.image_url,
+    linkedPercent: p.measures ? Number(p.measures.complete_code_percent) : null,
+    fuzzyPercent: p.measures ? Number(p.measures.fuzzy_match_percent) : null,
   }));
   const platforms = [
     ...new Map(all.filter((r) => r.platform).map((r) => [r.platform!.toLowerCase(), r.platformName ?? r.platform!])).entries(),
@@ -49,19 +49,14 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-end gap-x-8 gap-y-4">
-        <div className="max-w-2xl">
-          <h1 className="text-3xl font-semibold tracking-tight text-balance">Decompilation progress</h1>
-          <p className="mt-2 text-sm leading-relaxed text-ink-2">
-            Matching decompilation projects tracked by {config().SITE_NAME}, from the objdiff reports their CI builds. Code matched is the
-            share of the game&apos;s code that compiles back to identical bytes.
-          </p>
-        </div>
-        <Link href="/manage/new" className="btn btn-primary sm:ml-auto">
-          <Plus size={14} />
-          Submit a project
-        </Link>
-      </div>
+      <h1 className="index-heading">Progress Reports</h1>
+      <blockquote className="index-intro">
+        <p>
+          Matching decompilation rebuilds a program from source until the compiled code matches the original binary. Follow the progress of
+          community projects below.
+        </p>
+        <Link href="/docs">Learn about matching decompilation</Link>
+      </blockquote>
       <ProjectFilters params={params} platforms={platforms} />
       <p className="mb-3 text-xs text-ink-3" aria-live="polite">
         {page.total === 0

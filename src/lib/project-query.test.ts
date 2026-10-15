@@ -59,3 +59,15 @@ describe("project list queries", () => {
     expect(pageWindow(1, 1)).toEqual([1]);
   });
 });
+
+it("combines multiple platform filters and preserves them in links", () => {
+  const params = parseListParams({ platform: " PS2,n64,ps2 " });
+  expect(params.platform).toBe("ps2,n64");
+  const projects = [
+    { owner: "a", repo: "a", name: "A", platform: "ps2", codePercent: 10, updated: null },
+    { owner: "b", repo: "b", name: "B", platform: "n64", codePercent: 20, updated: null },
+    { owner: "c", repo: "c", name: "C", platform: "gc", codePercent: 30, updated: null },
+  ];
+  expect(filterAndSort(projects, params).map((p) => p.repo)).toEqual(["a", "b"]);
+  expect(parseListParams(new URLSearchParams(listQuery(params))).platform).toBe("ps2,n64");
+});

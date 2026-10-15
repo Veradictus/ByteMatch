@@ -1,5 +1,5 @@
 /**
- * Project images are links to images hosted elsewhere; ByteMatch never downloads or stores them.
+ * Manually configured project images are links to images hosted elsewhere; ByteMatch never downloads or stores them.
  * The server only checks the link's shape (it does not fetch it, so a link cannot make the server
  * request internal addresses); browsers load the image directly, without a referrer.
  */

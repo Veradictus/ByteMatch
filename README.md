@@ -21,6 +21,8 @@ project switches by changing the domain and keeps its history with a one-click i
 
 ## Features
 
+- Includes light and dark themes, platform filtering, detailed progress reports, and optional SteamGridDB artwork.
+
 - **No CI changes** for projects that already upload `<VERSION>_report` artifacts (the
   dtk-template convention). Reports are read from successful runs on the default branch.
 - **Project pages**: one line of progress, then a grid of every unit (area = code size, filled green

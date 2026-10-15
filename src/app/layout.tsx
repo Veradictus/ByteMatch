@@ -5,7 +5,7 @@ import Link from "next/link";
 import { currentSession } from "@/auth/session";
 import { JsonLd } from "@/components/json-ld";
 import { MobileMenu } from "@/components/mobile-menu";
-import { Chat } from "@/components/ui/icons";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { siteJsonLd, siteMetadata } from "@/lib/seo";
 import { config } from "@/lib/config";
 import "./globals.css";
@@ -16,33 +16,34 @@ export async function generateMetadata(): Promise<Metadata> {
   return siteMetadata();
 }
 
-/** ByteMatch's mark: four units, three matched. */
-function Mark() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden className="shrink-0">
-      <rect x="1" y="1" width="11" height="11" rx="2.5" fill="var(--done)" />
-      <rect x="13.5" y="1" width="5.5" height="5.5" rx="1.5" fill="var(--done)" />
-      <rect x="13.5" y="8" width="5.5" height="11" rx="1.5" fill="var(--partial)" />
-      <rect x="1" y="13.5" width="11" height="5.5" rx="1.5" fill="var(--done)" />
-    </svg>
-  );
-}
-
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await currentSession().catch(() => null);
   const name = config().SITE_NAME;
   const discord = config().SITE_DISCORD_URL.trim();
-  const navLink = "rounded-lg px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink";
+  const navLink = "rounded-control px-3 py-1.5 text-xl text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink";
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} style={{ colorScheme: "dark" }}>
-      <body className="min-h-screen font-sans antialiased">
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('bytematch-theme');document.documentElement.dataset.theme=t==='light'||t==='dark'?t:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}catch(e){document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}})()`,
+          }}
+        />
+      </head>
+      {/* Extensions may add body attributes before hydration; descendants still receive normal checks. */}
+      <body className="min-h-screen font-sans antialiased" suppressHydrationWarning>
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
         <JsonLd data={siteJsonLd()} />
-        <header className="sticky top-0 z-30 border-b border-line bg-bg/80 backdrop-blur-md">
-          <nav className="mx-auto flex h-14 max-w-7xl items-center gap-1 px-4">
-            <Link href="/" className="mr-3 flex items-center gap-2 text-[15px] font-semibold tracking-tight">
-              <Mark />
-              {name}
+        <header className="site-header">
+          <nav className="site-container site-nav" aria-label="Main navigation">
+            <Link href="/" className="site-brand">
+              {name === "ByteMatch" ? "bytematch.dev" : name}
             </Link>
+            <span className="nav-divider" aria-hidden="true">
+              /
+            </span>
             <div className="hidden items-center gap-1 md:flex">
               <Link href="/" className={navLink}>
                 Projects
@@ -58,12 +59,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </Link>
             </div>
             <div className="ml-auto hidden items-center gap-1 md:flex">
-              {discord ? (
-                <a href={discord} target="_blank" rel="noopener noreferrer" className={`${navLink} flex items-center gap-1.5`}>
-                  <Chat size={15} />
-                  Discord
-                </a>
-              ) : null}
               {session ? (
                 <>
                   <Link href="/manage" className={navLink}>
@@ -87,16 +82,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </>
               ) : (
                 <>
-                  <Link href="/manage/new" className={navLink}>
-                    Submit a project
-                  </Link>
                   <Link href="/login" className="btn btn-ghost ml-1 h-8 px-3">
                     Sign in
                   </Link>
                 </>
               )}
             </div>
-            <div className="ml-auto flex items-center gap-2 md:hidden">
+            <ThemeToggle />
+            <div className="flex items-center gap-2 md:hidden">
               {session ? null : (
                 <Link href="/login" className="btn btn-ghost h-9 px-3">
                   Sign in
@@ -119,9 +112,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           </nav>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:py-10">{children}</main>
-        <footer className="border-t border-line">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-6 text-xs text-ink-3">
+        <main id="main-content" className="site-container site-main">
+          {children}
+        </main>
+        <footer className="site-footer">
+          <div className="site-container flex flex-wrap items-center gap-x-6 gap-y-2">
             <span>
               {name} tracks matching decompilation progress from{" "}
               <a className="underline hover:text-ink" href="https://github.com/encounter/objdiff">

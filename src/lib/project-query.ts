@@ -54,7 +54,18 @@ export function parseListParams(source: ParamSource): ListParams {
   const page = Number.parseInt(get(source, "page"), 10);
   return {
     q: get(source, "q").slice(0, 100),
-    platform: get(source, "platform").toLowerCase().slice(0, 20),
+    platform: [
+      ...new Set(
+        get(source, "platform")
+          .toLowerCase()
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean),
+      ),
+    ]
+      .slice(0, 32)
+      .join(",")
+      .slice(0, 256),
     sort: SORTS.includes(sort) ? sort : "updated",
     page: Number.isFinite(page) && page > 0 ? page : 1,
   };
@@ -72,7 +83,8 @@ export function matches(row: Listable, q: string): boolean {
 }
 
 export function filterAndSort<T extends Listable>(rows: T[], p: Pick<ListParams, "q" | "platform" | "sort">): T[] {
-  const list = rows.filter((r) => (!p.platform || (r.platform ?? "").toLowerCase() === p.platform) && (!p.q || matches(r, p.q)));
+  const platforms = new Set(p.platform.split(",").filter(Boolean));
+  const list = rows.filter((r) => (!platforms.size || platforms.has((r.platform ?? "").toLowerCase())) && (!p.q || matches(r, p.q)));
   const byName = (a: T, b: T) => a.name.localeCompare(b.name);
   // Projects without a value for the chosen measure go last; ties fall back to most recently updated.
   const num = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? -Infinity : v);

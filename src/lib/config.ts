@@ -17,6 +17,9 @@ const schema = z.object({
   /** The community Discord linked in the header and footer; empty hides the link. */
   SITE_DISCORD_URL: z.string().default("https://discord.gg/qqe7ZqCsMT"),
 
+  /** Optional server-only key for automatic hero artwork. */
+  STEAMGRIDDB_API_KEY: z.string().trim().default(""),
+
   /** A GitHub token for reading public repositories' artifacts when the App is not installed on them. */
   GITHUB_TOKEN: z.string().optional(),
   /** GitHub App: webhooks, installation tokens, PR comments, and sign-in (its OAuth client). */

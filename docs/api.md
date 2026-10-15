@@ -185,7 +185,7 @@ Query parameters, the same as the project list page:
 | Parameter  | Meaning                                                                           |
 | ---------- | --------------------------------------------------------------------------------- |
 | `q`        | Search words; each must appear in the name, `owner/repo`, game or franchise.      |
-| `platform` | Platform id, e.g. `ps2`.                                                          |
+| `platform` | One or more platform ids, comma-separated, e.g. `ps2,n64`.                        |
 | `sort`     | `updated` (default), `progress`, `functions`, `gain`, `size`, `newest` or `name`. |
 | `page`     | Page number, from 1.                                                              |
 | `per_page` | Results per page: default 100, at most 500.                                       |
