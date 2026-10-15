@@ -281,18 +281,6 @@ kbd {
   color: var(--text-3);
   font-size: 0.75rem;
 }
-.theme-toggle {
-  display: grid;
-  place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  flex-shrink: 0;
-  color: var(--text-2);
-  cursor: pointer;
-}
-.theme-toggle:hover {
-  background: var(--surface-2);
-}
 .skip-link {
   position: fixed;
   top: -5rem;
@@ -662,11 +650,6 @@ kbd {
 
 .report-bars > :only-child {
   grid-column: 1 / -1;
-}
-@media (max-width: 767px) {
-  .site-nav > .theme-toggle {
-    margin-left: auto;
-  }
 }
 
 .project-hero {

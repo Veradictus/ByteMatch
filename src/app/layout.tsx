@@ -6,7 +6,6 @@ import { currentSession } from "@/auth/session";
 import { JsonLd } from "@/components/json-ld";
 import { MobileMenu } from "@/components/mobile-menu";
 import { SiteLinks } from "@/components/site-links";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { siteJsonLd, siteMetadata } from "@/lib/seo";
 import { config } from "@/lib/config";
 import "./globals.css";
@@ -76,8 +75,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </>
               )}
             </div>
-            <ThemeToggle />
-            <div className="flex items-center gap-2 md:hidden">
+            <div className="ml-auto flex items-center gap-2 md:hidden">
               {session ? null : (
                 <Link href="/login" className="btn btn-ghost h-9 px-3">
                   Sign in
