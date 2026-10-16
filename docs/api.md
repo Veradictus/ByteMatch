@@ -200,6 +200,16 @@ Each entry has `owner`, `repo`, `name`, `short_name`, `platform`, `game`, `franc
 `version` (the default version), `timestamp` (its latest commit), `gain_30d` (matched-code
 percentage points gained over the last 30 days) and `measures`.
 
+`game`, `franchise` and `release_year` are the project's. `version_games` lists the versions that
+are a different game (a repository decompiling several games), each with its own `game`,
+`franchise` and `release_year`; it's `{}` for most projects:
+
+```json
+"version_games": {
+  "n-tranced": { "game": "Crash Bandicoot 2: N-Tranced", "franchise": "Crash Bandicoot", "release_year": 2003 }
+}
+```
+
 Query parameters, the same as the project list page:
 
 | Parameter  | Meaning                                                                           |

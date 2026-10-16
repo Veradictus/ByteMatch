@@ -49,6 +49,13 @@ export async function GET(request: NextRequest) {
       game: p.game,
       franchise: p.franchise,
       release_year: p.release_year,
+      // Versions that are a different game from the project's (one repository, several games).
+      version_games: Object.fromEntries(
+        Object.entries(p.version_games ?? {}).map(([v, g]) => [
+          v,
+          { game: g.game, franchise: g.franchise ?? null, release_year: g.releaseYear ?? null },
+        ]),
+      ),
       url: projectUrl(p),
       icon_url: p.icon_url,
       cover_url: p.image_url,
