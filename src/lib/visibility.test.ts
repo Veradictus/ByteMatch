@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkDiscordUrl } from "./links";
-import { hiddenFromPublic } from "./visibility";
+import { HIDE_AFTER_DAYS, hiddenFromPublic, unreachable } from "./visibility";
 
 describe("hiddenFromPublic", () => {
   const ok = { enabled: true, lastError: null };
@@ -9,13 +9,27 @@ describe("hiddenFromPublic", () => {
     expect(hiddenFromPublic(ok, true)).toBe(false);
     expect(hiddenFromPublic(ok, false)).toBe(false);
   });
-  it("hides disabled projects, repositories GitHub says are gone, and errors with nothing to show", () => {
+  it("hides disabled projects, repositories gone for a while, and errors with nothing to show", () => {
+    const longAgo = new Date(Date.now() - (HIDE_AFTER_DAYS + 1) * 86400_000);
     expect(hiddenFromPublic({ enabled: false, lastError: null }, true)).toBe(true);
-    expect(hiddenFromPublic({ enabled: true, lastError: "Not Found - https://docs.github.com/rest" }, true)).toBe(true);
-    expect(hiddenFromPublic({ enabled: true, lastError: "Repository access blocked" }, true)).toBe(true);
+    expect(hiddenFromPublic({ enabled: true, lastError: "Not Found - https://docs.github.com/rest", errorSince: longAgo }, true)).toBe(
+      true,
+    );
+    expect(hiddenFromPublic({ enabled: true, lastError: "Repository access blocked", errorSince: longAgo }, true)).toBe(true);
+    // Rows from before errorSince was kept count from their last error, or hide at once without one.
+    expect(hiddenFromPublic({ enabled: true, lastError: "Not Found", lastErrorAt: longAgo }, true)).toBe(true);
+    expect(hiddenFromPublic({ enabled: true, lastError: "Not Found" }, true)).toBe(true);
     expect(hiddenFromPublic({ enabled: true, lastError: noAccess }, false)).toBe(true);
     expect(hiddenFromPublic({ enabled: true, lastError: "report is not valid JSON" }, false)).toBe(true);
   });
+  it("keeps a repository made private for a while visible, with its last progress", () => {
+    const p = { enabled: true, lastError: "Not Found - https://docs.github.com/rest", errorSince: new Date(Date.now() - 3 * 86400_000) };
+    expect(unreachable(p)).toBe(true);
+    expect(hiddenFromPublic(p, true)).toBe(false);
+    // ...but not one that never had a report.
+    expect(hiddenFromPublic(p, false)).toBe(true);
+  });
+
   it("keeps projects with history visible through passing errors and missing access on our side", () => {
     expect(hiddenFromPublic({ enabled: true, lastError: "API rate limit exceeded for user [id]" }, true)).toBe(false);
     expect(hiddenFromPublic({ enabled: true, lastError: "report is not valid JSON" }, true)).toBe(false);

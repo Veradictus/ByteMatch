@@ -78,6 +78,8 @@ export const projects = pgTable(
     lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
     lastError: text("last_error"),
     lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+    /** When the current run of errors began (lastErrorAt moves on every failure; this doesn't). */
+    errorSince: timestamp("error_since", { withTimezone: true }),
     /** An https link to the project's cover (the banner on its page), hosted elsewhere; ByteMatch never stores images. */
     imageUrl: text("image_url"),
     /** An https link to the project's square icon (list thumbnail and next to its name), hosted elsewhere. */

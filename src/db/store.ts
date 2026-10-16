@@ -1,7 +1,7 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import { and, asc, desc, eq, isNotNull, sql as dsql } from "drizzle-orm";
 import { sha256 } from "../lib/crypto";
-import { ACCESS_ERROR_PATTERN } from "../lib/visibility";
+import { ACCESS_ERROR_PATTERN, HIDE_AFTER_DAYS } from "../lib/visibility";
 import { encodeReport, parseReport } from "../report/parse";
 import type { Measures, Report } from "../report/types";
 import { db } from "./client";
@@ -74,7 +74,10 @@ export async function storeReport(input: StoreInput): Promise<ReportRow> {
       .values(values)
       .onConflictDoUpdate({ target: [reports.projectId, reports.version, reports.commitSha], set: { ...values, createdAt: new Date() } })
       .returning();
-    await tx.update(projects).set({ lastError: null, lastErrorAt: null, updatedAt: new Date() }).where(eq(projects.id, project.id));
+    await tx
+      .update(projects)
+      .set({ lastError: null, lastErrorAt: null, errorSince: null, updatedAt: new Date() })
+      .where(eq(projects.id, project.id));
     return row;
   });
 }
@@ -263,7 +266,10 @@ export async function projectIndex() {
       limit 1
     ) b on true
     where p.enabled
-      and (p.last_error is null or (r.version is not null and p.last_error !~* ${ACCESS_ERROR_PATTERN}))
+      and (p.last_error is null
+           or (r.version is not null
+               and (p.last_error !~* ${ACCESS_ERROR_PATTERN}
+                    or coalesce(p.error_since, p.last_error_at) > now() - make_interval(days => ${HIDE_AFTER_DAYS}))))
     order by lower(p.name)`);
   return [...rows];
 }
@@ -279,7 +285,9 @@ const shownVersions = dsql`
   from ${projects} p
   where p.enabled
     and (p.last_error is null
-         or (exists (select 1 from ${reports} e where e.project_id = p.id) and p.last_error !~* ${ACCESS_ERROR_PATTERN}))`;
+         or (exists (select 1 from ${reports} e where e.project_id = p.id)
+             and (p.last_error !~* ${ACCESS_ERROR_PATTERN}
+                  or coalesce(p.error_since, p.last_error_at) > now() - make_interval(days => ${HIDE_AFTER_DAYS}))))`;
 
 export type Milestone = {
   owner: string;

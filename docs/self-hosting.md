@@ -185,6 +185,11 @@ Accounts listed in `ADMIN_GITHUB_LOGINS` see **Admin** in the header (`/admin`; 
 
 Deleting a project removes it and everything stored for it. Disabling hides it but keeps its history.
 
+A project whose repository GitHub stops serving (deleted, made private, blocked) keeps its page,
+badges and JSON, with a note, for 14 days from the first failed sync, showing the last progress
+ByteMatch read; after that it's hidden until a sync succeeds again, which brings it straight back.
+A repository made private for a while and then public again never drops off.
+
 ## Search engines
 
 ByteMatch looks after the parts search engines read on its own, and keeps them current as projects

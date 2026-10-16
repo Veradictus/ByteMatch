@@ -9,7 +9,7 @@ import { config } from "@/lib/config";
 import { slugify } from "@/lib/games";
 import { platformName } from "@/lib/platforms";
 import { publicError } from "@/lib/errors";
-import { hiddenFromPublic } from "@/lib/visibility";
+import { HIDE_AFTER_DAYS, hiddenFromPublic, unreachable } from "@/lib/visibility";
 import { chosenTheme } from "@/lib/theme-server";
 import { canManage, currentSession } from "@/auth/session";
 import { projectProblem, type ProjectProblem } from "@/lib/project-problems";
@@ -403,7 +403,21 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
         </a>
       </nav>
 
-      {problem ? <ProblemPanel problem={problem} manageHref={`/manage/${project.owner}/${project.repo}`} /> : null}
+      {problem ? (
+        <ProblemPanel problem={problem} manageHref={`/manage/${project.owner}/${project.repo}`} />
+      ) : unreachable(project) ? (
+        <p className="rounded-xl border border-warn/40 bg-warn/5 px-4 py-3 text-sm text-ink-2">
+          ByteMatch can&apos;t reach this project&apos;s repository
+          {project.errorSince ? (
+            <>
+              {" "}
+              since <LocalTime value={project.errorSince} />
+            </>
+          ) : null}
+          , so this is the last progress it read. If the repository stays private or gone, the project leaves the site after{" "}
+          {HIDE_AFTER_DAYS} days; it comes back on its own once the repository can be read again.
+        </p>
+      ) : null}
 
       <div className={`grid grid-cols-[minmax(0,1fr)] items-start gap-5 ${directory ? "" : "xl:grid-cols-[minmax(0,1fr)_23rem]"}`}>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">

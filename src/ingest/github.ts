@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql as dsql } from "drizzle-orm";
 import type { Octokit } from "octokit";
 import { db } from "../db/client";
 import { ingestProblems, projects, reports, type Project } from "../db/schema";
@@ -146,7 +146,12 @@ async function remember(project: Project, patch: Partial<Project>) {
 export async function recordError(projectId: number, error: unknown) {
   await db()
     .update(projects)
-    .set({ lastError: redact(error instanceof Error ? error.message : String(error)), lastErrorAt: new Date() })
+    .set({
+      lastError: redact(error instanceof Error ? error.message : String(error)),
+      lastErrorAt: new Date(),
+      // The first failure starts the clock; later ones keep it.
+      errorSince: dsql`coalesce(${projects.errorSince}, now())`,
+    })
     .where(eq(projects.id, projectId));
 }
 
@@ -210,6 +215,7 @@ export async function pollProject(project: Project, maxRuns = 20): Promise<RunRe
     lastPolledAt: new Date(),
     lastError: problem ? problem.message : null,
     lastErrorAt: problem ? problem.createdAt : null,
+    errorSince: problem ? (project.errorSince ?? problem.createdAt) : null,
     ...(installationId && installationId !== project.installationId ? { installationId } : {}),
   });
   return results;

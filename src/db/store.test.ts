@@ -111,8 +111,14 @@ describe.skipIf(!TEST_DB)("store", () => {
         source: "upload",
       });
     }
-    const setError = (id: number, lastError: string) => db().update(projects).set({ lastError }).where(eq(projects.id, id));
+    const longAgo = new Date(Date.now() - 30 * 86400_000);
+    const setError = (id: number, lastError: string, errorSince = new Date()) =>
+      db().update(projects).set({ lastError, errorSince }).where(eq(projects.id, id));
+    // Just made private: still listed with its last progress.
     await setError(gone.id, "Not Found - https://docs.github.com/rest/actions");
+    expect((await projectIndex()).map((r) => r.repo)).toContain("deleted");
+    // Gone for weeks: off the list.
+    await setError(gone.id, "Not Found - https://docs.github.com/rest/actions", longAgo);
     await setError(flaky.id, "API rate limit exceeded for user [id]");
     await setError(broken.id, "no GitHub access to x/broken");
     expect((await projectIndex()).map((r) => r.repo).sort()).toEqual(["flaky", "fresh", "rac1-decomp"]);
