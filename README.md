@@ -36,7 +36,8 @@ project switches by changing the domain and keeps its history with a one-click i
 - **History you keep**: import it from decomp.dev while it still serves it, upload saved history
   files, and download any project's history in the same format.
 - **Games, franchises and activity**: projects naming the same game share a page with a combined
-  progress chart, games group into franchises, and an activity feed shows milestones (first past
+  progress chart (one repository can hold several games, one per version), games group into
+  franchises, and an activity feed shows milestones (first past
   50%, 90%, a full match) and the week's biggest gains.
 - **Themes**: colours (Slate by default, Light, Graphite and seven accent themes) and layouts
   (Classic, or the flat, card-based Directory), picked from the header, plus your own, shared by a

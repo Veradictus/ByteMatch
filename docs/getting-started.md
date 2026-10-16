@@ -194,7 +194,7 @@ show.
 Signed-in admins of the repository can change:
 
 - display name, short name, platform, default version, default category, default branch;
-- game, franchise and release year;
+- game, franchise and release year, and a different game for any version that is one;
 - artifact pattern, workflow restriction, split versions;
 - PR comments on or off, and whether the project is enabled;
 - upload tokens (create and revoke).
