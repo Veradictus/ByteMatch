@@ -190,6 +190,20 @@ badges and JSON, with a note, for 14 days from the first failed sync, showing th
 ByteMatch read; after that it's hidden until a sync succeeds again, which brings it straight back.
 A repository made private for a while and then public again never drops off.
 
+## Statistics
+
+The admin panel's **Statistics** page shows visitors and page views per day (30 or 90 days), the
+most viewed pages, the sites visitors came from, users, projects and reports, and a week-by-week
+table of growth.
+
+Visitors are counted without cookies and without storing addresses. Each public page view sends a
+small request to `/api/hit` with the page's path, and the referring site's host on the first page
+of a visit. A visitor is a hash of the day, the instance's `SECRET_KEY`, their address and their
+browser, so the same person can't be linked from one day to the next. The nightly prune job turns
+each finished day's hashes into a count and deletes them. Browsers that send Do Not Track or Global
+Privacy Control aren't counted at all, and neither are crawlers, private pages (`/admin`, `/manage`)
+or visits with scripts turned off.
+
 ## Search engines
 
 ByteMatch looks after the parts search engines read on its own, and keeps them current as projects
