@@ -470,6 +470,12 @@ kbd {
   flex-shrink: 0;
   height: 100%;
 }
+/* The opened unit's bar on the map: a little taller, with an edge so it reads against its panel. */
+.match-track.unit-progress {
+  height: 1.5rem;
+  border-radius: calc(var(--radius-panel) / 3);
+  outline: 1px solid var(--line-strong);
+}
 .report-summary {
   border-top: 3px solid var(--accent);
 }

@@ -44,11 +44,16 @@ export function MatchProgress({
   linked = 0,
   fuzzy = 0,
   label,
+  color = "var(--done)",
+  className,
 }: {
   matched: number;
   linked?: number;
   fuzzy?: number;
   label: string;
+  /** The matched part's colour; the project lists use the theme's "done" green. */
+  color?: string;
+  className?: string;
 }) {
   const clamp = (n: number) => Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
   const l = clamp(linked);
@@ -56,13 +61,13 @@ export function MatchProgress({
   const f = Math.max(m, clamp(fuzzy));
   const hatch = (c: string, d: string) => `repeating-linear-gradient(135deg, ${c} 0 7px, ${d} 7px 14px)`;
   const segments = [
-    { key: "linked", width: l, background: "var(--done)" },
-    { key: "matched", width: m - l, background: l ? hatch("var(--done)", "var(--done-deep)") : "var(--done)" },
+    { key: "linked", width: l, background: color },
+    { key: "matched", width: m - l, background: l ? hatch(color, `color-mix(in srgb, ${color} 82%, black)`) : color },
     { key: "fuzzy", width: f - m, background: hatch("var(--partial)", "color-mix(in srgb, var(--partial) 55%, var(--surface))") },
   ].filter((s) => s.width > 0);
   return (
     <div
-      className="match-track"
+      className={className ? `match-track ${className}` : "match-track"}
       role="meter"
       aria-label={label}
       aria-valuemin={0}

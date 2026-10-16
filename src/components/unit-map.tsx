@@ -291,17 +291,19 @@ export function UnitMap({
       </div>
 
       {unit ? (
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-3">
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-surface-2 px-3 py-2.5 text-xs text-ink-3">
           <div className="min-w-48 flex-1">
             <MatchProgress
               matched={unit.matchedCodePercent}
               linked={unit.completeCodePercent}
               fuzzy={unit.fuzzy}
+              color={baseColor(unit.matchedCodePercent, unit.fuzzy)}
               label={`${unit.name} progress`}
+              className="unit-progress"
             />
           </div>
           <span className="tabular-nums">
-            <span className="font-medium text-ink">{unit.matchedCodePercent.toFixed(2)}%</span> matched
+            <span className="text-sm font-semibold text-ink">{unit.matchedCodePercent.toFixed(2)}%</span> matched
             {unit.fuzzy > unit.matchedCodePercent ? <> · {unit.fuzzy.toFixed(2)}% fuzzy</> : null} · {fmt.format(unit.matchedFunctions)} /{" "}
             {fmt.format(unit.totalFunctions)} functions · {bytes(unit.totalCode)}
           </span>
