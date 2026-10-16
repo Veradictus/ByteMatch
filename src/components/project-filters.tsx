@@ -55,21 +55,18 @@ export function ProjectFilters({ params, platforms }: { params: ListParams; plat
           className="field pl-10"
         />
       </div>
-      <Select value={params.platform} onChange={(e) => go({ platform: e.target.value })} aria-label="Platform">
-        <option value="">All platforms</option>
-        {platforms.map(([id, name]) => (
-          <option key={id} value={id}>
-            {name}
-          </option>
-        ))}
-      </Select>
-      <Select value={params.sort} onChange={(e) => go({ sort: e.target.value as Sort })} aria-label="Sort by">
-        {SORTS.map((s) => (
-          <option key={s} value={s}>
-            {SORT_LABELS[s]}
-          </option>
-        ))}
-      </Select>
+      <Select
+        value={params.platform}
+        onChange={(v) => go({ platform: v })}
+        aria-label="Platform"
+        options={[{ value: "", label: "All platforms" }, ...platforms.map(([id, name]) => ({ value: id, label: name }))]}
+      />
+      <Select
+        value={params.sort}
+        onChange={(v) => go({ sort: v as Sort })}
+        aria-label="Sort by"
+        options={SORTS.map((s) => ({ value: s, label: SORT_LABELS[s] }))}
+      />
     </div>
   );
 }

@@ -225,14 +225,12 @@ export function UnitMap({
             All units
           </button>
         ) : (
-          <Select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-            <option value="">All</option>
-            {usedCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name || c.id}
-              </option>
-            ))}
-          </Select>
+          <Select
+            value={category}
+            onChange={(v) => setCategory(v)}
+            aria-label="Category"
+            options={[{ value: "", label: "All" }, ...usedCategories.map((c) => ({ value: c.id, label: c.name || c.id }))]}
+          />
         )}
         <div className="relative">
           <Search size={15} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-ink-3" />

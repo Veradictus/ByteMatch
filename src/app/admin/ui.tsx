@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Select } from "@/components/ui/select";
 import type { AdminState } from "./actions";
 
 /** A destructive button that asks once more before it acts. */
@@ -190,10 +191,16 @@ export function MergeForm({
     <form action={run} className="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
       <label className="grid gap-1.5 text-sm">
         Kind
-        <select name="kind" value={kind} onChange={(e) => setKind(e.target.value as "game" | "franchise")} className="field">
-          <option value="game">Game</option>
-          <option value="franchise">Franchise</option>
-        </select>
+        <Select
+          name="kind"
+          value={kind}
+          onChange={(v) => setKind(v as "game" | "franchise")}
+          aria-label="Kind"
+          options={[
+            { value: "game", label: "Game" },
+            { value: "franchise", label: "Franchise" },
+          ]}
+        />
       </label>
       <label className="grid gap-1.5 text-sm">
         Name to merge

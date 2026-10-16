@@ -19,15 +19,11 @@ export function VersionSelect({
   return (
     <Select
       value={current}
-      onChange={(e) => router.push(e.target.value === defaultVersion ? base : `${base}/${encodeURIComponent(e.target.value)}`)}
+      onChange={(v) => router.push(v === defaultVersion ? base : `${base}/${encodeURIComponent(v)}`)}
       aria-label="Game version"
-      className="w-auto min-w-36 [&_select]:h-9 [&_select]:font-mono [&_select]:text-xs"
-    >
-      {versions.map((v) => (
-        <option key={v} value={v}>
-          {v}
-        </option>
-      ))}
-    </Select>
+      className="w-auto min-w-36"
+      buttonClassName="h-9 font-mono text-xs"
+      options={versions.map((v) => ({ value: v, label: v }))}
+    />
   );
 }

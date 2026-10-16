@@ -80,11 +80,17 @@ export function UnitTable({ units, owner, repo, version }: { units: UnitRow[]; o
             className="field pl-10"
           />
         </div>
-        <Select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort units" className="w-40">
-          <option value="name">Name</option>
-          <option value="size">Largest</option>
-          <option value="matched">Most matched</option>
-        </Select>
+        <Select
+          value={sort}
+          onChange={(v) => setSort(v as Sort)}
+          aria-label="Sort units"
+          className="w-40"
+          options={[
+            { value: "name", label: "Name" },
+            { value: "size", label: "Largest" },
+            { value: "matched", label: "Most matched" },
+          ]}
+        />
         <label className="flex items-center gap-2 text-sm text-ink-2">
           <input
             type="checkbox"

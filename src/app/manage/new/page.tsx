@@ -107,16 +107,16 @@ export default async function NewProject() {
                   </label>
                   <label className="grid gap-1.5 text-sm">
                     Platform
-                    <Select name="platform" defaultValue="">
-                      <option value="">Not set</option>
-                      {Object.entries(PLATFORMS)
-                        .filter(([id]) => id !== "ps1")
-                        .map(([id, name]) => (
-                          <option key={id} value={id}>
-                            {name}
-                          </option>
-                        ))}
-                    </Select>
+                    <Select
+                      name="platform"
+                      defaultValue=""
+                      options={[
+                        { value: "", label: "Not set" },
+                        ...Object.entries(PLATFORMS)
+                          .filter(([id]) => id !== "ps1")
+                          .map(([id, name]) => ({ value: id, label: name })),
+                      ]}
+                    />
                   </label>
                 </div>
               </ActionForm>

@@ -236,24 +236,21 @@ export default async function ManageProject({ params, searchParams }: Params) {
               <input name="shortName" defaultValue={project.shortName ?? ""} className={inputClass} />
             </Field>
             <Field label="Platform">
-              <Select name="platform" defaultValue={project.platform ?? ""}>
-                <option value="">—</option>
-                {Object.entries(PLATFORMS).map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name} ({id})
-                  </option>
-                ))}
-              </Select>
+              <Select
+                name="platform"
+                defaultValue={project.platform ?? ""}
+                options={[
+                  { value: "", label: "—" },
+                  ...Object.entries(PLATFORMS).map(([id, name]) => ({ value: id, label: `${name} (${id})` })),
+                ]}
+              />
             </Field>
             <Field label="Default version">
-              <Select name="defaultVersion" defaultValue={project.defaultVersion ?? ""}>
-                <option value="">Most recently updated</option>
-                {versions.map((v) => (
-                  <option key={v.version} value={v.version}>
-                    {v.version}
-                  </option>
-                ))}
-              </Select>
+              <Select
+                name="defaultVersion"
+                defaultValue={project.defaultVersion ?? ""}
+                options={[{ value: "", label: "Most recently updated" }, ...versions.map((v) => ({ value: v.version, label: v.version }))]}
+              />
             </Field>
             <Field label="Default branch" hint="runs on this branch are tracked">
               <input name="defaultBranch" defaultValue={project.defaultBranch} className={inputClass} />
