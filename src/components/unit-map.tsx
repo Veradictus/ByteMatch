@@ -6,12 +6,15 @@ import { grouped, ordered, squarify, type Rect } from "./treemap";
 import { parseUnitFilter } from "./unit-filter";
 import { ChevronRight, Close, Search } from "./ui/icons";
 import { Select } from "./ui/select";
+import { MatchProgress } from "./directory";
 import { SourcePanel } from "./source-panel";
 
 export interface MapUnit {
   name: string;
   totalCode: number;
   matchedCodePercent: number;
+  /** How much of its code is fully linked (complete); 0 to 100. */
+  completeCodePercent: number;
   fuzzy: number;
   matchedFunctions: number;
   totalFunctions: number;
@@ -286,6 +289,24 @@ export function UnitMap({
           )}
         </div>
       </div>
+
+      {unit ? (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-3">
+          <div className="min-w-48 flex-1">
+            <MatchProgress
+              matched={unit.matchedCodePercent}
+              linked={unit.completeCodePercent}
+              fuzzy={unit.fuzzy}
+              label={`${unit.name} progress`}
+            />
+          </div>
+          <span className="tabular-nums">
+            <span className="font-medium text-ink">{unit.matchedCodePercent.toFixed(2)}%</span> matched
+            {unit.fuzzy > unit.matchedCodePercent ? <> · {unit.fuzzy.toFixed(2)}% fuzzy</> : null} · {fmt.format(unit.matchedFunctions)} /{" "}
+            {fmt.format(unit.totalFunctions)} functions · {bytes(unit.totalCode)}
+          </span>
+        </div>
+      ) : null}
 
       <div
         ref={grid}
