@@ -3,6 +3,8 @@ import { ExternalImage } from "./external-image";
 import { ProgressBar } from "./progress-bar";
 
 export interface ProjectRow {
+  /** Where the row links: the project page, or one version's page for a version that's its own game. */
+  path?: string;
   owner: string;
   repo: string;
   name: string;
@@ -43,7 +45,7 @@ export function ProjectList({ rows, empty }: { rows: ProjectRow[]; empty: React.
       {rows.map((r) => (
         <li key={`${r.owner}/${r.repo}`}>
           <Link
-            href={`/${r.owner}/${r.repo}`}
+            href={r.path ?? `/${r.owner}/${r.repo}`}
             className="grid gap-x-6 gap-y-2 px-5 py-4 transition-colors hover:bg-surface-2 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_9rem] sm:items-center"
           >
             <div className="flex min-w-0 items-center gap-3.5">

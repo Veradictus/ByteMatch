@@ -95,6 +95,12 @@ export const projects = pgTable(
     franchise: text("franchise"),
     /** The game's original release year. */
     releaseYear: integer("release_year"),
+    /**
+     * Versions that are a different game from the project's (one repository decompiling two games
+     * on one engine): version → its game, franchise and release year. Versions not listed are the
+     * project's game.
+     */
+    versionGames: jsonb("version_games").$type<Record<string, VersionGame>>().notNull().default({}),
     createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: created(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -309,6 +315,12 @@ export const sharedThemes = pgTable(
     index("shared_themes_used_idx").on(t.lastUsedAt),
   ],
 );
+
+export interface VersionGame {
+  game: string;
+  franchise?: string | null;
+  releaseYear?: number | null;
+}
 
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;

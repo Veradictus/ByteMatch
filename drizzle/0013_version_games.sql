@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "version_games" jsonb DEFAULT '{}'::jsonb NOT NULL;

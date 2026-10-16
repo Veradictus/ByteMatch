@@ -90,7 +90,7 @@ export function ProjectCards({ rows, empty }: { rows: ProjectRow[]; empty: React
                   {r.owner}/{r.repo}
                 </p>
                 <h2 className="text-xl leading-snug font-semibold tracking-tight [overflow-wrap:anywhere]">
-                  <Link href={`/${r.owner}/${r.repo}`} className="project-card-link">
+                  <Link href={r.path ?? `/${r.owner}/${r.repo}`} className="project-card-link">
                     {r.name}
                   </Link>
                 </h2>

@@ -152,6 +152,13 @@ missing series name), or start a new page. For names that mean one game but look
 such as regional titles, the site's admins can merge them; projects using either name then share
 one page, and the merged name's old address redirects to it.
 
+### One repository, several games
+
+When a repository's versions are different games (two games on one engine, say), open **Different
+games per version** under Settings and give each such version its game, franchise and year. Each
+then appears on its own game's page, linking to that version, with that version's progress.
+Versions left empty stay under the project's game.
+
 ## 7. Functional C (optional)
 
 Some projects keep C for functions they haven't matched, which does what the original does without

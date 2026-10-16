@@ -5,7 +5,7 @@ import { ACCESS_ERROR_PATTERN, HIDE_AFTER_DAYS } from "../lib/visibility";
 import { encodeReport, parseReport } from "../report/parse";
 import type { Measures, Report } from "../report/types";
 import { db } from "./client";
-import { functionalLists, projects, reportBlobs, reports, type Project, type ReportRow } from "./schema";
+import { functionalLists, projects, reportBlobs, reports, type Project, type ReportRow, type VersionGame } from "./schema";
 import { summarizeFunctional, type FunctionalList, type StoredFunctional } from "../report/functional";
 
 export interface CommitInfo {
@@ -237,6 +237,7 @@ export async function projectIndex() {
     game: string | null;
     franchise: string | null;
     release_year: number | null;
+    version_games: Record<string, VersionGame>;
     version: string | null;
     measures: Measures | null;
     commit_timestamp: string | null;
@@ -246,7 +247,8 @@ export async function projectIndex() {
     /** Matched-code percentage points gained over the last 30 days (since the first report if newer). */
     gain_30d: number | null;
   }>(dsql`
-    select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.image_url, p.icon_url, p.created_at,
+    select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.version_games,
+           p.image_url, p.icon_url, p.created_at,
            r.version, r.measures, r.commit_timestamp,
            (r.measures->>'matched_code_percent')::float8 - (b.measures->>'matched_code_percent')::float8 as gain_30d
     from ${projects} p

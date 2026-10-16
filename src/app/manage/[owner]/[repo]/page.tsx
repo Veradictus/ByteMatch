@@ -294,6 +294,54 @@ export default async function ManageProject({ params, searchParams }: Params) {
               />
             </Field>
           </div>
+          {versions.length > 1 ? (
+            <details className="rounded-lg border border-line px-4 py-3" open={Object.keys(project.versionGames ?? {}).length > 0}>
+              <summary className="cursor-pointer text-sm select-none">Different games per version</summary>
+              <p className="mt-2 mb-3 text-xs text-ink-3">
+                For a repository whose versions are different games (one engine, two games): give a version its own game, and it gets its
+                own place on that game&apos;s page. Leave a version empty to keep it under the game above.
+              </p>
+              <div className="grid gap-2">
+                {versions.map((v, i) => {
+                  const g = project.versionGames?.[v.version];
+                  return (
+                    <div key={v.version} className="grid items-center gap-2 sm:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_6rem]">
+                      <input type="hidden" name={`vg_version_${i}`} value={v.version} />
+                      <span className="truncate font-mono text-xs text-ink-2" title={v.version}>
+                        {v.version}
+                      </span>
+                      <input
+                        name={`vg_game_${i}`}
+                        defaultValue={g?.game ?? ""}
+                        list="game-names"
+                        placeholder={project.game ?? "Game"}
+                        aria-label={`Game for ${v.version}`}
+                        className={inputClass}
+                        autoComplete="off"
+                      />
+                      <input
+                        name={`vg_franchise_${i}`}
+                        defaultValue={g?.franchise ?? ""}
+                        list="franchise-names"
+                        placeholder={project.franchise ?? "Franchise"}
+                        aria-label={`Franchise for ${v.version}`}
+                        className={inputClass}
+                        autoComplete="off"
+                      />
+                      <input
+                        name={`vg_year_${i}`}
+                        defaultValue={g?.releaseYear ?? ""}
+                        inputMode="numeric"
+                        placeholder="Year"
+                        aria-label={`Release year for ${v.version}`}
+                        className={inputClass}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          ) : null}
           <Field label="Discord invite" hint="optional, shown on the project page">
             <input
               name="discordUrl"

@@ -350,7 +350,9 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
   const previous = new Map(rows.map((h, i) => [h.commitSha, rows[i - 1]?.measures]));
   const site = config().PUBLIC_URL;
   const versionPath = version ? `/${encodeURIComponent(r.version)}` : "";
-  const gameSlug = project.game ? slugify(project.game) : "";
+  // A version can be a different game from the rest of the project (one repository, two games).
+  const gameName = project.versionGames?.[r.version]?.game || project.game;
+  const gameSlug = gameName ? slugify(gameName) : "";
   const navBtn = "btn btn-ghost h-9 flex-1 px-3 text-sm";
   const navOff = "btn h-9 flex-1 cursor-not-allowed border border-line px-3 text-sm text-ink-3 opacity-50";
   const directory = (await chosenTheme()).style.layout === "directory";
@@ -361,10 +363,10 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
       <JsonLd data={projectJsonLd(projectSeoInput(r, { versionInUrl: !!version, importedFromDecompDev: imported }))} />
       <JsonLd
         data={breadcrumbJsonLd([
-          ...(gameSlug && project.game
+          ...(gameSlug && gameName
             ? [
                 { name: "Games", path: "/games" },
-                { name: project.game, path: `/games/${gameSlug}` },
+                { name: gameName, path: `/games/${gameSlug}` },
               ]
             : []),
           { name: project.name, path: projectCanonicalPath(projectSeoInput(r, { versionInUrl: !!version })) },
@@ -374,7 +376,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm">
         {gameSlug ? (
           <Link href={`/games/${gameSlug}`} className="max-w-[40vw] truncate text-ink-3 hover:text-ink">
-            {project.game}
+            {gameName}
           </Link>
         ) : (
           <Link href="/" className="text-ink-3 hover:text-ink">

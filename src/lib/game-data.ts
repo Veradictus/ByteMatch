@@ -1,6 +1,6 @@
 import type { ProjectRow } from "@/components/project-list";
 import { loadAliases } from "@/db/aliases";
-import { projectIndex } from "@/db/store";
+import { latestReport, projectIndex } from "@/db/store";
 import { groupFranchises, groupGames, resolveKey, type Game } from "./games";
 import { platformName } from "./platforms";
 
@@ -12,27 +12,61 @@ export type GameRow = ProjectRow & {
   cover: string | null;
 };
 
-/** Public projects as list rows, with the game fields the games pages group on. */
+const row = (p: Awaited<ReturnType<typeof projectIndex>>[number]): GameRow => ({
+  id: p.id,
+  owner: p.owner,
+  repo: p.repo,
+  name: p.name,
+  platform: p.platform,
+  platformName: platformName(p.platform),
+  game: p.game,
+  franchise: p.franchise,
+  releaseYear: p.release_year,
+  version: p.version,
+  codePercent: p.measures ? Number(p.measures.matched_code_percent) : null,
+  functions: p.measures ? { done: Number(p.measures.matched_functions), total: Number(p.measures.total_functions) } : null,
+  updated: p.commit_timestamp ? new Date(p.commit_timestamp).toISOString() : null,
+  gain30: p.gain_30d === null ? null : Number(p.gain_30d),
+  createdAt: new Date(p.created_at).toISOString(),
+  image: p.icon_url,
+  cover: p.image_url,
+});
+
+/**
+ * Public projects as list rows, with the game fields the games pages group on. A project whose
+ * versions are different games (one repository, one engine, two games) gives a row per such
+ * version, linking to that version and carrying its own measures; the rest of the project is one
+ * row as usual.
+ */
 export async function gameRows(): Promise<GameRow[]> {
-  return (await projectIndex()).map((p) => ({
-    id: p.id,
-    owner: p.owner,
-    repo: p.repo,
-    name: p.name,
-    platform: p.platform,
-    platformName: platformName(p.platform),
-    game: p.game,
-    franchise: p.franchise,
-    releaseYear: p.release_year,
-    version: p.version,
-    codePercent: p.measures ? Number(p.measures.matched_code_percent) : null,
-    functions: p.measures ? { done: Number(p.measures.matched_functions), total: Number(p.measures.total_functions) } : null,
-    updated: p.commit_timestamp ? new Date(p.commit_timestamp).toISOString() : null,
-    gain30: p.gain_30d === null ? null : Number(p.gain_30d),
-    createdAt: new Date(p.created_at).toISOString(),
-    image: p.icon_url,
-    cover: p.image_url,
-  }));
+  const out: GameRow[] = [];
+  for (const p of await projectIndex()) {
+    const base = row(p);
+    const own = p.version_games ?? {};
+    const mine = p.version ? own[p.version] : undefined;
+    out.push(
+      mine ? { ...base, game: mine.game, franchise: mine.franchise ?? base.franchise, releaseYear: mine.releaseYear ?? null } : base,
+    );
+    for (const [version, g] of Object.entries(own)) {
+      if (version === p.version || !g?.game) continue;
+      const latest = await latestReport(p.id, version);
+      if (!latest) continue;
+      const m = latest.measures;
+      out.push({
+        ...base,
+        path: `/${p.owner}/${p.repo}/${encodeURIComponent(version)}`,
+        version,
+        game: g.game,
+        franchise: g.franchise ?? base.franchise,
+        releaseYear: g.releaseYear ?? null,
+        codePercent: Number(m.matched_code_percent),
+        functions: { done: Number(m.matched_functions), total: Number(m.total_functions) },
+        updated: latest.commitTimestamp.toISOString(),
+        gain30: null,
+      });
+    }
+  }
+  return out;
 }
 
 export async function loadGames() {

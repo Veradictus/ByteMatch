@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { canManage, canManageRepo, currentSession } from "@/auth/session";
 import { db } from "@/db/client";
-import { projects, type Project } from "@/db/schema";
+import { projects, type Project, type VersionGame } from "@/db/schema";
 import { findProject, latestArtifactRun } from "@/db/store";
 import { userClient } from "@/github/client";
 import { enqueue, JOBS } from "@/lib/queue";
@@ -87,6 +87,27 @@ const text = (form: FormData, key: string) => {
   return v === "" ? null : v;
 };
 
+/**
+ * The per-version games from the settings form: vg_version_N with its vg_game_N, vg_franchise_N
+ * and vg_year_N. A version left without a game is the project's game, so it isn't kept.
+ */
+function versionGamesFrom(form: FormData): Record<string, VersionGame> {
+  const out: Record<string, VersionGame> = {};
+  for (const [key, value] of form.entries()) {
+    const m = /^vg_version_(\d+)$/.exec(key);
+    if (!m) continue;
+    const version = String(value).trim();
+    const game = cleanName(text(form, `vg_game_${m[1]}`));
+    if (!version || !game) continue;
+    out[version] = {
+      game,
+      franchise: cleanName(text(form, `vg_franchise_${m[1]}`)),
+      releaseYear: cleanYear(text(form, `vg_year_${m[1]}`)),
+    };
+  }
+  return out;
+}
+
 export async function updateProject(owner: string, repo: string, _: FormState, form: FormData): Promise<FormState> {
   const project = await managed(owner, repo);
   const pattern = text(form, "artifactPattern") ?? "^(?<version>.+)_report$";
@@ -107,6 +128,7 @@ export async function updateProject(owner: string, repo: string, _: FormState, f
       description: text(form, "description"),
       platform: text(form, "platform"),
       game: cleanName(text(form, "game")),
+      versionGames: versionGamesFrom(form),
       franchise: cleanName(text(form, "franchise")),
       releaseYear: cleanYear(text(form, "releaseYear")),
       defaultVersion: text(form, "defaultVersion"),
