@@ -4,6 +4,8 @@ import { closeDb, db } from "../db/client";
 import { projects, reports, type Project } from "../db/schema";
 import { pruneReports } from "../db/store";
 import { pruneSharedThemes } from "../db/themes";
+import { rollUpTraffic } from "../db/traffic";
+import { utcDay } from "../lib/traffic";
 import { commentOnRun } from "../github/comments";
 import { importFromDecompDev } from "../ingest/decompdev";
 import { ingestRunById, pollProject, recordError } from "../ingest/github";
@@ -120,6 +122,7 @@ export async function startWorker() {
     handle(JOBS.prune, async () => ({
       pruned: await pruneReports(config().REPORT_RETENTION_DAYS),
       unusedThemes: await pruneSharedThemes(),
+      visitorHashesDropped: await rollUpTraffic(utcDay()),
     })),
   );
 

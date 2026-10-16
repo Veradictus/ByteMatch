@@ -4,6 +4,7 @@ import {
   bigserial,
   boolean,
   customType,
+  date,
   index,
   integer,
   jsonb,
@@ -314,6 +315,50 @@ export const sharedThemes = pgTable(
     index("shared_themes_created_idx").on(t.createdAt),
     index("shared_themes_used_idx").on(t.lastUsedAt),
   ],
+);
+
+/*
+ * Traffic, for the admin Statistics page. No cookies and no addresses: a visitor is a hash of the
+ * day, the instance's secret, their address and their browser, so the same person can't be linked
+ * across days, and the hashes themselves are deleted once each day's count is rolled up.
+ */
+
+/** Today's (and yesterday's) distinct visitors, as day-salted hashes; rolled up nightly. */
+export const trafficVisitors = pgTable(
+  "traffic_visitors",
+  {
+    day: date("day").notNull(),
+    hash: text("hash").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.hash] })],
+);
+
+/** Distinct visitors per day, for days already rolled up. */
+export const trafficDays = pgTable("traffic_days", {
+  day: date("day").primaryKey(),
+  visitors: integer("visitors").notNull(),
+});
+
+/** Page views per day and path. */
+export const trafficPages = pgTable(
+  "traffic_pages",
+  {
+    day: date("day").notNull(),
+    path: text("path").notNull(),
+    views: integer("views").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.path] })],
+);
+
+/** Arrivals per day from other sites, by host. */
+export const trafficReferrers = pgTable(
+  "traffic_referrers",
+  {
+    day: date("day").notNull(),
+    host: text("host").notNull(),
+    visits: integer("visits").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.host] })],
 );
 
 export interface VersionGame {

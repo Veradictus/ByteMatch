@@ -5,6 +5,7 @@ import Link from "next/link";
 import { currentSession } from "@/auth/session";
 import { JsonLd } from "@/components/json-ld";
 import { MobileMenu } from "@/components/mobile-menu";
+import { PageViews } from "@/components/page-views";
 import { SiteLinks } from "@/components/site-links";
 import { ThemePicker } from "@/components/theme-picker";
 import { ThemeProvider } from "@/components/use-theme";
@@ -57,6 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <body className="min-h-screen font-sans antialiased">
         <ThemeProvider initial={theme}>
+          <PageViews />
           <JsonLd data={siteJsonLd()} />
           <header className="site-header sticky top-0 z-30 border-b border-line bg-bg/80 backdrop-blur-md">
             <nav className="site-container site-nav mx-auto flex h-14 max-w-7xl items-center gap-1 px-4">
