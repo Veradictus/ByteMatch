@@ -110,7 +110,15 @@ export function UnitMap({
   const layout = search.get("layout") === "size" ? "size" : "ordered";
   const unit = useMemo(() => units.find((u) => u.name === openUnit) ?? null, [units, openUnit]);
 
-  const [category, setCategory] = useState("");
+  // In the URL, so it stays put when the page moves to another commit.
+  const category = search.get("category") ?? "";
+  const setCategory = (next: string) => {
+    const qs = new URLSearchParams(search.toString());
+    if (next) qs.set("category", next);
+    else qs.delete("category");
+    const s = qs.toString();
+    start(() => router.replace(`${path}${s ? `?${s}` : ""}`, { scroll: false }));
+  };
   const [query, setQuery] = useState("");
   const [focus, setFocus] = useState<Tile | null>(null);
   const [pinned, setPinned] = useState<Tile | null>(null);

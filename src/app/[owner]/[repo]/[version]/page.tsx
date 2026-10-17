@@ -19,6 +19,7 @@ export default async function Page({
   searchParams,
 }: Params & { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { owner, repo, version } = await params;
-  const commit = (await searchParams).commit;
-  return <ProjectView owner={owner} repo={repo} version={version} commit={typeof commit === "string" ? commit : undefined} />;
+  const query = await searchParams;
+  const commit = query.commit;
+  return <ProjectView owner={owner} repo={repo} version={version} commit={typeof commit === "string" ? commit : undefined} view={query} />;
 }

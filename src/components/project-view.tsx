@@ -292,7 +292,23 @@ function FunctionalLine({ functional: f, matched }: { functional: Functional; ma
   );
 }
 
-export async function ProjectView({ owner, repo, version, commit }: { owner: string; repo: string; version?: string; commit?: string }) {
+/** What the unit map keeps in the URL, carried along when moving between commits. */
+const KEPT_PARAMS = new Set(["unit", "layout", "category"]);
+
+export async function ProjectView({
+  owner,
+  repo,
+  version,
+  commit,
+  view = {},
+}: {
+  owner: string;
+  repo: string;
+  version?: string;
+  commit?: string;
+  /** The page's other query parameters (the open unit, the map's layout and category), kept when moving between commits. */
+  view?: Record<string, string | string[] | undefined>;
+}) {
   let r;
   try {
     r = await resolve(owner, repo, version ? decodeURIComponent(version) : undefined, null, commit);
@@ -324,7 +340,13 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
   const at = rows.findIndex((h) => h.commitSha === row.commitSha);
   const older = at > 0 ? rows[at - 1] : undefined;
   const newer = at >= 0 && at < rows.length - 1 ? rows[at + 1] : undefined;
-  const commitHref = (sha?: string) => (sha && sha !== rows.at(-1)?.commitSha ? `${pagePath}?commit=${sha.slice(0, 12)}` : pagePath);
+  const kept = Object.entries(view).filter((e): e is [string, string] => KEPT_PARAMS.has(e[0]) && typeof e[1] === "string");
+  const commitHref = (sha?: string) => {
+    const qs = new URLSearchParams(kept);
+    if (sha && sha !== rows.at(-1)?.commitSha) qs.set("commit", sha.slice(0, 12));
+    const s = qs.toString();
+    return s ? `${pagePath}?${s}` : pagePath;
+  };
 
   const points: HistoryPoint[] = rows.map((h) => ({
     t: h.commitTimestamp.getTime(),
@@ -546,7 +568,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
                     </span>
                   )}
                   {commit ? (
-                    <Link href={pagePath} className="btn btn-primary h-9 flex-1 px-3 text-sm" scroll={false}>
+                    <Link href={commitHref()} className="btn btn-primary h-9 flex-1 px-3 text-sm" scroll={false}>
                       Latest
                     </Link>
                   ) : (
