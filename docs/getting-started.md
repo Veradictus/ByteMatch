@@ -158,7 +158,9 @@ On instances with IGDB lookups turned on, typing in the
 Game field also lists matching games from [IGDB](https://www.igdb.com). Picking one fills in IGDB's
 name for it, and its year and franchise where those are empty, and keeps IGDB's id for the game:
 projects that picked the same game share its page whatever they later rename it to. Typing a
-different name afterwards unlinks it. Nothing needs IGDB; a typed name works as before.
+different name afterwards unlinks it. Nothing needs IGDB; a typed name works as before. Site admins
+can also link a whole game page at once (under Admin → Games), which gives every project on it
+IGDB's name and id; the page's old address keeps working.
 
 ### One repository, several games
 
