@@ -5,7 +5,9 @@ ByteMatch instance. The public instance is [bytematch.dev](https://bytematch.dev
 instance, use its domain instead.
 
 Moving from decomp.dev? Read [Migrating from decomp.dev](migrating-from-decomp-dev.md) instead; it
-covers the same steps plus keeping your history.
+covers the same steps plus keeping your history. To have a coding assistant do the repository side
+(objdiff units, CI artifact, badge), give it the prompt in
+[Setting up with an AI assistant](setup-prompt.md).
 
 ## 1. Register the project
 
@@ -181,6 +183,28 @@ the project list and pull request comments are unchanged. On the unit map, a fun
 functional C says so, with its confidence. The manage page says how many listed functions are
 already matched, so the list can drop them.
 
+## 8. Ports (optional)
+
+If someone has built a port from your decompilation (a native PC version, say), list it under
+**Ports** on the manage page: a name, a link to wherever it lives (repository, releases page or
+website), the systems it runs on and how far along it is (playable, in progress, early). If the
+repository has several versions, you can say which one it's built from; in a repository of
+several games, that also decides which game's page it's listed on. Ports show in the project's
+sidebar, on its game's page and on [/ports](https://bytematch.dev/ports). ByteMatch links to them
+and hosts nothing. Up to eight per project.
+
+## Recently updated and bumps
+
+The project list's default order, **Recently updated**, goes by the last commit that changed the
+project's matched code, matched functions, fully linked code or matched data. Commits that change
+none of those (a tooling update rolled out to all your projects, a rename, a rebuild) don't move
+the project up, so several projects updated at once don't take over the top of the list. Fuzzy
+match and totals don't count either, since a new objdiff or a changed split can shift them with no
+work done.
+
+For news a report can't show, like a new tool or a playable build, use **Bump to the top** on the
+manage page: the project counts as updated at that moment. One bump per project a day.
+
 ## Source on the project page
 
 On the unit map, **View source** on an opened unit shows its file, and selecting a function shows
@@ -197,6 +221,7 @@ Signed-in admins of the repository can change:
 - game, franchise and release year, and a different game for any version that is one;
 - artifact pattern, workflow restriction, split versions;
 - PR comments on or off, and whether the project is enabled;
+- ports built from the project (add and remove);
 - upload tokens (create and revoke).
 
 Actions:
@@ -209,6 +234,8 @@ Actions:
 - **Re-read latest run**: read the newest CI run again. Polls never re-read a commit already
   stored, so use this when its artifact holds something that wasn't read the first time, such as a
   functional list.
+- **Bump to the top**: list the project as updated now, once a day (see
+  [Recently updated and bumps](#recently-updated-and-bumps)).
 - **Upload history**: add a saved history file to one version, and download what ByteMatch has.
 
 If the last ingest failed, the error is shown on this page.
