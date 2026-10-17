@@ -24,6 +24,9 @@ export function NameField({
   aliases,
   projectId,
   className,
+  value: controlled,
+  onChange,
+  below,
 }: {
   name: string;
   kind: "game" | "franchise";
@@ -33,8 +36,15 @@ export function NameField({
   aliases: [string, string][];
   projectId: number;
   className: string;
+  /** Controlled use: the value and its setter (defaultValue is then ignored). */
+  value?: string;
+  onChange?: (v: string) => void;
+  /** Shown between the input and its hint (suggestions from elsewhere). */
+  below?: React.ReactNode;
 }) {
-  const [value, setValue] = useState(defaultValue);
+  const [own, setOwn] = useState(defaultValue);
+  const value = controlled ?? own;
+  const setValue = onChange ?? setOwn;
   const map = new Map(aliases);
   const v = value.trim();
   const key = v ? resolveKey(v, map) : "";
@@ -90,6 +100,7 @@ export function NameField({
           <option key={o.key} value={o.title} />
         ))}
       </datalist>
+      {below}
       <span id={`${name}-hint`} aria-live="polite" className="min-h-4 text-xs">
         {hint}
       </span>

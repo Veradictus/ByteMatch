@@ -118,6 +118,8 @@ export interface GameProject {
   franchise: string | null;
   releaseYear: number | null;
   platform: string | null;
+  /** Picked from IGDB: projects with the same id are one game, however their names are spelled. */
+  igdbId?: number | null;
 }
 
 export interface Game<P extends GameProject> {
@@ -155,8 +157,13 @@ function consensus<T>(values: (T | null)[]): T | null {
 /** Groups projects into games; projects without a game are left out. Sorted by year, then title. */
 export function groupGames<P extends GameProject>(projects: P[], aliases: { games?: Aliases; franchises?: Aliases } = {}): Game<P>[] {
   const byKey = new Map<string, P[]>();
+  // An IGDB id groups by the name its first project gives it, so the rest follow that one.
+  const igdbKeys = new Map<number, string>();
   for (const p of projects) {
-    const key = p.game ? resolveKey(p.game, aliases.games) : "";
+    if (p.igdbId && p.game && !igdbKeys.has(p.igdbId)) igdbKeys.set(p.igdbId, resolveKey(p.game, aliases.games));
+  }
+  for (const p of projects) {
+    const key = p.game ? (p.igdbId && igdbKeys.get(p.igdbId)) || resolveKey(p.game, aliases.games) : "";
     if (!key) continue;
     byKey.set(key, [...(byKey.get(key) ?? []), p]);
   }
@@ -170,15 +177,17 @@ export function groupGames<P extends GameProject>(projects: P[], aliases: { game
     franchiseVotes.set(k, [...(franchiseVotes.get(k) ?? []), f]);
   }
   for (const [k, votes] of franchiseVotes) franchiseTitles.set(k, consensus(votes)!);
-  return [...byKey.values()]
-    .map((list) => {
-      const title = consensus(list.map((p) => cleanName(p.game)))!;
+  return [...byKey]
+    .map(([key, list]) => {
+      // A name picked from IGDB is the game's own; otherwise the spelling most projects use.
+      const picked = list.filter((p) => p.igdbId);
+      const title = consensus((picked.length ? picked : list).map((p) => cleanName(p.game)))!;
       const fk = consensus(list.map((p) => (cleanName(p.franchise) ? resolveKey(p.franchise!, aliases.franchises) : null)));
       const franchise = fk ? (franchiseTitles.get(fk) ?? null) : null;
       return {
         // The URL follows the name most of its projects use, so it reads like the title.
         slug: slugify(title),
-        key: resolveKey(title, aliases.games),
+        key,
         title,
         franchise,
         franchiseSlug: franchise ? slugify(franchise) : null,

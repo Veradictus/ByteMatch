@@ -112,4 +112,20 @@ describe("games", () => {
       ),
     ).toMatch(/^[ab]$/);
   });
+  it("groups projects that picked one IGDB game, however they spell it", () => {
+    const games = groupGames([
+      { ...p("Ratchet & Clank"), igdbId: 1770 },
+      // Picked from IGDB, then renamed: the id still puts it with the game.
+      { ...p("R&C"), igdbId: 1770 },
+      p("Ratchet and Clank"),
+      p("R&C"),
+      { ...p("Jak and Daxter"), igdbId: 1528 },
+    ]);
+    expect(games.map((g) => [g.title, g.projects.length])).toEqual([
+      ["Jak and Daxter", 1],
+      ["R&C", 1],
+      ["Ratchet & Clank", 3],
+    ]);
+    expect(games.every((g) => g.key)).toBe(true);
+  });
 });

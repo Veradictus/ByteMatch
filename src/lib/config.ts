@@ -34,6 +34,9 @@ const schema = z.object({
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
+  /** A Twitch application's credentials, for looking game names up on IGDB (src/lib/igdb.ts); optional. */
+  IGDB_CLIENT_ID: z.string().trim().optional(),
+  IGDB_CLIENT_SECRET: z.string().trim().optional(),
   /** 32 random bytes as hex or base64: encrypts the GitHub tokens of signed-in users. Required for sign-in. */
   SECRET_KEY: z.string().optional(),
   /** GitHub logins (comma-separated) who may manage every project. */

@@ -5,7 +5,9 @@ import { findProject, latestReport, projectVersions } from "@/db/store";
 import { isSummary } from "@/report/functional";
 import { loadGames } from "@/lib/game-data";
 import { resolveKey } from "@/lib/games";
-import { NameField, type NameOption } from "../../name-field";
+import type { NameOption } from "../../name-field";
+import { GameFields } from "../../game-fields";
+import { igdbEnabled } from "@/lib/igdb";
 import { config } from "@/lib/config";
 import { projectProblem, skippedRuns } from "@/lib/project-problems";
 import { ProblemPanel } from "@/components/problem-panel";
@@ -282,41 +284,19 @@ export default async function ManageProject({ params, searchParams }: Params) {
               <input name="defaultCategory" defaultValue={project.defaultCategory ?? ""} className={inputClass} />
             </Field>
           </div>
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem]">
-            <Field label="Game" hint="groups projects on one game page">
-              <NameField
-                name="game"
-                kind="game"
-                defaultValue={project.game ?? ""}
-                placeholder="Ratchet & Clank"
-                options={gameOptions}
-                aliases={[...names.aliases.games]}
-                projectId={project.id}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Franchise" hint="optional">
-              <NameField
-                name="franchise"
-                kind="franchise"
-                defaultValue={project.franchise ?? ""}
-                placeholder="Ratchet & Clank"
-                options={franchiseOptions}
-                aliases={[...names.aliases.franchises]}
-                projectId={project.id}
-                className={inputClass}
-              />
-            </Field>
-            <Field label="Year" hint="release">
-              <input
-                name="releaseYear"
-                defaultValue={project.releaseYear ?? ""}
-                inputMode="numeric"
-                placeholder="2002"
-                className={inputClass}
-              />
-            </Field>
-          </div>
+          <GameFields
+            game={project.game ?? ""}
+            franchise={project.franchise ?? ""}
+            year={project.releaseYear ? String(project.releaseYear) : ""}
+            igdbId={project.igdbId}
+            igdb={igdbEnabled()}
+            gameOptions={gameOptions}
+            franchiseOptions={franchiseOptions}
+            gameAliases={[...names.aliases.games]}
+            franchiseAliases={[...names.aliases.franchises]}
+            projectId={project.id}
+            inputClass={inputClass}
+          />
           {versions.length > 1 ? (
             <details className="rounded-lg border border-line px-4 py-3" open={Object.keys(project.versionGames ?? {}).length > 0}>
               <summary className="cursor-pointer text-sm select-none">Different games per version</summary>

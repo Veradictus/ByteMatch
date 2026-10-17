@@ -245,6 +245,7 @@ export async function projectIndex() {
     game: string | null;
     franchise: string | null;
     release_year: number | null;
+    igdb_id: number | null;
     version_games: Record<string, VersionGame>;
     version: string | null;
     measures: Measures | null;
@@ -260,7 +261,7 @@ export async function projectIndex() {
     /** Where "Recently updated" puts it: the later of the two above. */
     listed_at: string | null;
   }>(dsql`
-    select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.version_games,
+    select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.igdb_id, p.version_games,
            p.image_url, p.icon_url, p.created_at,
            r.version, r.measures, r.commit_timestamp,
            (r.measures->>'matched_code_percent')::float8 - (b.measures->>'matched_code_percent')::float8 as gain_30d,

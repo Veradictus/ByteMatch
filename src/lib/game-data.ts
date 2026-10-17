@@ -9,6 +9,7 @@ export type GameRow = ProjectRow & {
   game: string | null;
   franchise: string | null;
   releaseYear: number | null;
+  igdbId: number | null;
   cover: string | null;
 };
 
@@ -22,6 +23,7 @@ const row = (p: Awaited<ReturnType<typeof projectIndex>>[number]): GameRow => ({
   game: p.game,
   franchise: p.franchise,
   releaseYear: p.release_year,
+  igdbId: p.igdb_id,
   version: p.version,
   codePercent: p.measures ? Number(p.measures.matched_code_percent) : null,
   functions: p.measures ? { done: Number(p.measures.matched_functions), total: Number(p.measures.total_functions) } : null,
@@ -45,7 +47,9 @@ export async function gameRows(): Promise<GameRow[]> {
     const own = p.version_games ?? {};
     const mine = p.version ? own[p.version] : undefined;
     out.push(
-      mine ? { ...base, game: mine.game, franchise: mine.franchise ?? base.franchise, releaseYear: mine.releaseYear ?? null } : base,
+      mine
+        ? { ...base, game: mine.game, franchise: mine.franchise ?? base.franchise, releaseYear: mine.releaseYear ?? null, igdbId: null }
+        : base,
     );
     for (const [version, g] of Object.entries(own)) {
       if (version === p.version || !g?.game) continue;
@@ -59,6 +63,7 @@ export async function gameRows(): Promise<GameRow[]> {
         game: g.game,
         franchise: g.franchise ?? base.franchise,
         releaseYear: g.releaseYear ?? null,
+        igdbId: null,
         codePercent: Number(m.matched_code_percent),
         functions: { done: Number(m.matched_functions), total: Number(m.total_functions) },
         updated: latest.commitTimestamp.toISOString(),

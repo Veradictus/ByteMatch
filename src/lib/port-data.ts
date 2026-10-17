@@ -1,7 +1,6 @@
 import { allPorts, type ListedPort } from "@/db/ports";
 import { loadGames } from "./game-data";
-import { resolveKey, type Game } from "./games";
-import { portGame } from "./ports";
+import type { Game } from "./games";
 import type { GameRow } from "./game-data";
 
 export type PortWithSource = ListedPort & { from: { name: string; href: string } };
@@ -17,15 +16,18 @@ export interface PortGroup {
 
 /** Ports of public projects, grouped by the game they're of; games with a playable port first. */
 export async function portsByGame(): Promise<PortGroup[]> {
-  const [{ games, aliases, rows }, ports] = await Promise.all([loadGames(), allPorts()]);
-  const shown = new Set(rows.map((r) => r.id));
+  const [{ games, rows }, ports] = await Promise.all([loadGames(), allPorts()]);
+  // The row a port belongs to: its version's, when that version is another game, else the project's.
+  const rowOf = (p: ListedPort) =>
+    (p.version ? rows.find((r) => r.id === p.projectId && r.path && r.version === p.version) : undefined) ??
+    rows.find((r) => r.id === p.projectId && !r.path);
   const groups = new Map<string, PortGroup>();
   for (const p of ports) {
-    if (!shown.has(p.projectId)) continue;
-    const name = portGame(p, p.project);
-    const key = name ? resolveKey(name, aliases.games) : `project:${p.projectId}`;
-    const game = name ? (games.find((g) => g.key === key) ?? null) : null;
-    const group = groups.get(key) ?? { title: game?.title ?? name ?? p.project.name, slug: game?.slug ?? null, game, ports: [] };
+    const row = rowOf(p);
+    if (!row) continue;
+    const game = row.game ? (games.find((g) => g.projects.includes(row)) ?? null) : null;
+    const key = game ? `game:${game.key}` : `project:${p.projectId}`;
+    const group = groups.get(key) ?? { title: game?.title ?? p.project.name, slug: game?.slug ?? null, game, ports: [] };
     group.ports.push({ ...p, from: { name: p.project.name, href: `/${p.project.owner}/${p.project.repo}` } });
     groups.set(key, group);
   }

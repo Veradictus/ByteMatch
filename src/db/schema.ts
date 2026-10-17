@@ -96,6 +96,8 @@ export const projects = pgTable(
     franchise: text("franchise"),
     /** The game's original release year. */
     releaseYear: integer("release_year"),
+    /** The game's IGDB id, when its name was picked from IGDB: projects sharing one share a game page. */
+    igdbId: integer("igdb_id"),
     /**
      * Versions that are a different game from the project's (one repository decompiling two games
      * on one engine): version → its game, franchise and release year. Versions not listed are the

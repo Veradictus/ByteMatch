@@ -131,6 +131,8 @@ export async function updateProject(owner: string, repo: string, _: FormState, f
       description: text(form, "description"),
       platform: text(form, "platform"),
       game: cleanName(text(form, "game")),
+      // Set by the game field when the name was picked from IGDB; meaningless without a name.
+      igdbId: cleanName(text(form, "game")) && /^\d{1,9}$/.test(text(form, "igdbId") ?? "") ? Number(text(form, "igdbId")) : null,
       versionGames: versionGamesFrom(form),
       franchise: cleanName(text(form, "franchise")),
       releaseYear: cleanYear(text(form, "releaseYear")),
