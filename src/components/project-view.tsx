@@ -11,6 +11,7 @@ import { coverStyle } from "@/lib/images";
 import { portGame } from "@/lib/ports";
 import { projectPorts } from "@/db/ports";
 import { PortList } from "./port-list";
+import { CategoryList, CategorySort } from "./category-list";
 import { platformName } from "@/lib/platforms";
 import { publicError } from "@/lib/errors";
 import { HIDE_AFTER_DAYS, hiddenFromPublic, unreachable } from "@/lib/visibility";
@@ -25,7 +26,6 @@ import { ExternalImage } from "./external-image";
 import { ChevronRight, DiscordMark, GitHubMark } from "./ui/icons";
 import { VersionSelect } from "./version-select";
 import { HistoryChart, type HistoryPoint } from "./history-chart";
-import { ProgressBar } from "./progress-bar";
 import { UnitMap, type MapUnit } from "./unit-map";
 import { UnitTable, type UnitRow } from "./unit-table";
 import { LocalTime } from "@/components/local-time";
@@ -43,13 +43,34 @@ function Stat({ label, value, detail }: { label: string; value: string; detail?:
 }
 
 /** A titled panel in the right-hand column (stacked under the grid on narrow screens). */
-function Side({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+function Side({
+  title,
+  aside,
+  action,
+  children,
+}: {
+  title: string;
+  aside?: React.ReactNode;
+  /** A control at the heading's end (a sort order, say). */
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const heading = (
+    <h2 className="flex items-baseline gap-2 text-sm font-semibold">
+      {title}
+      {aside ? <span className="text-xs font-normal text-ink-3">{aside}</span> : null}
+    </h2>
+  );
   return (
     <section className="panel p-5">
-      <h2 className="mb-3.5 flex items-baseline gap-2 text-sm font-semibold">
-        {title}
-        {aside ? <span className="text-xs font-normal text-ink-3">{aside}</span> : null}
-      </h2>
+      {action ? (
+        <div className="mb-3.5 flex items-center justify-between gap-3">
+          {heading}
+          {action}
+        </div>
+      ) : (
+        <div className="mb-3.5">{heading}</div>
+      )}
       {children}
     </section>
   );
@@ -664,18 +685,15 @@ export async function ProjectView({
           </Side>
 
           {row.categories.length > 0 ? (
-            <Side title="Categories" aside={`${row.categories.length}`}>
-              <div className="-mr-2 grid max-h-72 grid-cols-[minmax(0,1fr)] gap-y-3 overflow-y-auto pr-2">
-                {row.categories.map((c) => (
-                  <div key={c.id}>
-                    <div className="mb-1 flex items-baseline justify-between gap-3 text-[13px]">
-                      <span className="truncate">{c.name || c.id}</span>
-                      <span className="shrink-0 font-mono text-xs text-ink-2">{c.measures.matched_code_percent.toFixed(2)}%</span>
-                    </div>
-                    <ProgressBar value={c.measures.matched_code_percent} label={`${c.name || c.id}: code matched`} />
-                  </div>
-                ))}
-              </div>
+            <Side title="Categories" aside={`${row.categories.length}`} action={<CategorySort />}>
+              <CategoryList
+                categories={row.categories.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  matchedCodePercent: c.measures.matched_code_percent,
+                  totalCode: Number(c.measures.total_code) || 0,
+                }))}
+              />
             </Side>
           ) : null}
 
