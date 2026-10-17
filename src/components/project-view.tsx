@@ -12,6 +12,7 @@ import { portGame } from "@/lib/ports";
 import { projectPorts } from "@/db/ports";
 import { PortList } from "./port-list";
 import { CategoryList, CategorySort } from "./category-list";
+import { LinkPending } from "./link-pending";
 import { platformName } from "@/lib/platforms";
 import { publicError } from "@/lib/errors";
 import { HIDE_AFTER_DAYS, hiddenFromPublic, unreachable } from "@/lib/visibility";
@@ -570,6 +571,7 @@ export async function ProjectView({
                     <Link href={commitHref(older.commitSha)} className={navBtn} scroll={false}>
                       <ChevronRight size={14} className="rotate-180" />
                       Previous
+                      <LinkPending />
                     </Link>
                   ) : (
                     <span className={navOff} aria-disabled>
@@ -579,6 +581,7 @@ export async function ProjectView({
                   )}
                   {newer ? (
                     <Link href={commitHref(newer.commitSha)} className={navBtn} scroll={false}>
+                      <LinkPending />
                       Next
                       <ChevronRight size={14} />
                     </Link>
@@ -591,6 +594,7 @@ export async function ProjectView({
                   {commit ? (
                     <Link href={commitHref()} className="btn btn-primary h-9 flex-1 px-3 text-sm" scroll={false}>
                       Latest
+                      <LinkPending />
                     </Link>
                   ) : (
                     <span className="btn h-9 flex-1 border border-line bg-surface-2 px-3 text-sm text-ink-2" aria-current="true">
@@ -715,6 +719,7 @@ export async function ProjectView({
                     >
                       <span className="shrink-0 font-mono text-xs text-ink-3">{h.commitSha.slice(0, 7)}</span>
                       <span className="min-w-0 flex-1 truncate text-ink-2">{h.commitMessage?.split("\n")[0] ?? ""}</span>
+                      <LinkPending />
                       <LocalTime value={h.commitTimestamp} style="ago" className="shrink-0 text-xs text-ink-3" />
                       {Math.abs(dCode) >= 0.005 ? (
                         <span className={`shrink-0 font-mono text-xs ${dCode > 0 ? "text-good" : "text-bad"}`}>
