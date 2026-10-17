@@ -154,6 +154,12 @@ missing series name), or start a new page. For names that mean one game but look
 such as regional titles, the site's admins can merge them; projects using either name then share
 one page, and the merged name's old address redirects to it.
 
+On instances with IGDB lookups turned on, typing in the
+Game field also lists matching games from [IGDB](https://www.igdb.com). Picking one fills in IGDB's
+name for it, and its year and franchise where those are empty, and keeps IGDB's id for the game:
+projects that picked the same game share its page whatever they later rename it to. Typing a
+different name afterwards unlinks it. Nothing needs IGDB; a typed name works as before.
+
 ### One repository, several games
 
 When a repository's versions are different games (two games on one engine, say), open **Different

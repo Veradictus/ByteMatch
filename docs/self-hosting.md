@@ -32,6 +32,8 @@ Settings are environment variables. Copy `.env.example` to `.env`; the file is r
 | `GITHUB_WEBHOOK_SECRET`    |                                                           | Webhook secret set on the App.                                                                                                                    |
 | `GITHUB_CLIENT_ID`         |                                                           | The App's OAuth client id, for sign-in.                                                                                                           |
 | `GITHUB_CLIENT_SECRET`     |                                                           | The App's OAuth client secret.                                                                                                                    |
+| `IGDB_CLIENT_ID`           |                                                           | Optional: a Twitch application's client id, for looking game names up on IGDB in the manage page's Game field. See [IGDB](#igdb).                 |
+| `IGDB_CLIENT_SECRET`       |                                                           | That application's client secret. Without both, the Game field works from typed names only.                                                       |
 | `SECRET_KEY`               |                                                           | 32 random bytes as 64 hex characters or base64 (`openssl rand -hex 32`). Encrypts signed-in users' GitHub tokens. Sign-in is disabled without it. |
 | `ADMIN_GITHUB_LOGINS`      |                                                           | Comma-separated GitHub logins who can manage every project.                                                                                       |
 | `OPEN_REGISTRATION`        | `true`                                                    | `false` makes adding projects admin-only.                                                                                                         |
@@ -284,3 +286,17 @@ The web and worker processes are stateless.
   Postgres, so each runs once, and duplicate webhook jobs for the same run collapse into one.
 
 The database is the only shared component.
+
+## IGDB
+
+Game name lookups use [IGDB](https://api-docs.igdb.com/), which needs a Twitch application (free):
+
+1. Sign in at [dev.twitch.tv/console](https://dev.twitch.tv/console) (two-factor authentication
+   must be on), **Register Your Application**, any name, OAuth redirect `http://localhost`, category
+   **Website Integration**, client type **Confidential**.
+2. Copy its client id and create a secret; set them as `IGDB_CLIENT_ID` and `IGDB_CLIENT_SECRET`
+   and restart the web process.
+
+ByteMatch asks IGDB only when a signed-in maintainer types in the Game field (at most 40 lookups a
+minute each, and repeated searches come from memory for a day), well inside IGDB's four requests a
+second. IGDB's terms ask for attribution where its data is shown; the field credits it.
