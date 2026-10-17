@@ -130,6 +130,12 @@ them: it never downloads or stores images, so host them somewhere public and sta
 repository, a GitHub release, an image host). Visitors' browsers load them directly, without a
 referrer. If a link stops working, the page simply shows no image.
 
+Frames crop the cover to fit: a wide banner on the project page, a shorter one on its game's page,
+and a narrower card in the games list. Drag the cover's preview on the manage page (or focus it and
+use the arrow keys, Shift for bigger steps) to choose which part stays in view; every frame crops
+around that point, and a small preview shows how game cards will look. **Center** puts it back in
+the middle. Changing the link starts the new image centred.
+
 ## 6. Game and franchise
 
 Under **Settings**, name the **game** the project decompiles, its **franchise** and its release
