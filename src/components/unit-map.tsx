@@ -8,6 +8,7 @@ import { ChevronRight, Close, Search } from "./ui/icons";
 import { Select } from "./ui/select";
 import { MatchProgress } from "./directory";
 import { SourcePanel } from "./source-panel";
+import { diffSnapshots, nextComparison, type Change, type Changes, type Snapshot } from "./map-changes";
 
 export interface MapUnit {
   name: string;
@@ -40,6 +41,8 @@ interface Tile {
   detail: string;
   address?: number;
   unit?: MapUnit;
+  /** How it differs from the commit the viewer came from. */
+  change?: Change;
 }
 
 const fmt = new Intl.NumberFormat("en-US");
@@ -68,6 +71,16 @@ function shade(matched: number, fuzzy: number): React.CSSProperties {
   };
 }
 
+const CHANGE_COLOR: Record<Change["kind"], string> = { up: "var(--good)", down: "var(--bad)", new: "var(--accent)" };
+
+/** A tile's change, for its readout: what it was at the older commit and what it is at the newer. */
+function changeNote(c: Change | undefined, all: Changes | undefined): string {
+  if (!c || !all) return "";
+  const pct = (n: number) => `${n >= 100 ? 100 : n.toFixed(1)}%`;
+  if (c.kind === "new") return ` · new since ${all.older.slice(0, 7)}`;
+  return ` · ${c.kind === "up" ? "improved" : "regressed"} ${pct(c.from ?? 0)} → ${pct(c.to)} (${all.older.slice(0, 7)} → ${all.newer.slice(0, 7)})`;
+}
+
 const LEGEND = [
   { label: "Matched", color: baseColor(100, 100) },
   { label: "In progress", color: baseColor(0, 70) },
@@ -94,9 +107,14 @@ export function UnitMap({
   repo,
   version,
   commit,
+  sha,
+  time,
 }: {
   units: MapUnit[];
   categories: { id: string; name: string }[];
+  /** The shown commit, in full, and its time (ms): moving to another commit compares against it. */
+  sha: string;
+  time: number;
   owner: string;
   repo: string;
   version: string;
@@ -167,6 +185,42 @@ export function UnitMap({
     };
   }, [openUnit, loaded, key, owner, repo, version, commit]);
 
+  // What each level of the map last showed (the units, or one unit's functions), at which commit.
+  // Moving to another commit compares against it, and a unit's functions stay on screen from the
+  // last commit until this one's arrive, instead of the grid going blank.
+  const level = openUnit ? `fn:${openUnit}` : "units";
+  const [seen, setSeen] = useState<Record<string, Snapshot<MapUnit | FunctionRow>>>({});
+  const [changes, setChanges] = useState<Record<string, Changes & { n: number }>>({});
+  const [onlyChanged, setOnlyChanged] = useState(false);
+  const current: MapUnit[] | FunctionRow[] | null = openUnit ? (Array.isArray(loaded) ? loaded : null) : units;
+  const last = seen[level];
+  if (current && last?.sha !== sha) {
+    // Adjusting state while rendering, as React suggests for "props changed": it runs once per commit change.
+    const now: Snapshot<MapUnit | FunctionRow> = { sha, time, items: current };
+    if (last) {
+      const d = openUnit
+        ? diffSnapshots(
+            last as Snapshot<FunctionRow>,
+            now as Snapshot<FunctionRow>,
+            (f) => `${f.name}@${f.address}`,
+            (f) => ((f.fuzzy_match_percent ?? 0) >= 100 ? 100 : 0),
+            (f) => f.fuzzy_match_percent ?? 0,
+          )
+        : diffSnapshots(
+            last as Snapshot<MapUnit>,
+            now as Snapshot<MapUnit>,
+            (u) => u.name,
+            (u) => u.matchedCodePercent,
+            (u) => u.fuzzy ?? 0,
+          );
+      setChanges((c) => ({ ...c, [level]: { ...d, n: nextComparison() } }));
+    }
+    setSeen((v) => ({ ...v, [level]: now }));
+  }
+  const levelChanges = changes[level];
+  const stale = openUnit && !Array.isArray(loaded) && last ? (last.items as FunctionRow[]) : null;
+  const shownFunctions = Array.isArray(loaded) ? loaded : stale;
+
   // Escape goes up a level.
   useEffect(() => {
     if (!openUnit) return;
@@ -179,10 +233,13 @@ export function UnitMap({
 
   const tiles: Tile[] = useMemo(() => {
     const test = parseUnitFilter(query);
+    const changed = levelChanges && !stale ? levelChanges.byKey : null;
+    const keep = (k: string) => !onlyChanged || !changed || changed.has(k);
     if (openUnit) {
-      const list = Array.isArray(loaded) ? loaded : [];
+      const list = shownFunctions ?? [];
       return list
         .filter((f) => test({ name: f.name, totalCode: f.size, matchedCodePercent: f.fuzzy_match_percent }))
+        .filter((f) => keep(`${f.name}@${f.address}`))
         .map((f) => ({
           key: `${f.name}@${f.address}`,
           label: f.name,
@@ -190,21 +247,23 @@ export function UnitMap({
           matched: f.fuzzy_match_percent >= 100 ? 100 : 0,
           fuzzy: f.fuzzy_match_percent,
           address: f.address ?? 0,
-          detail: `${f.address !== null ? `0x${f.address.toString(16).toUpperCase().padStart(8, "0")} · ` : ""}${bytes(f.size)} · ${f.fuzzy_match_percent >= 100 ? "matched" : `${f.fuzzy_match_percent.toFixed(1)}% match`}${f.functional ? ` · functional C (${f.functional} confidence)` : ""}`,
+          detail: `${f.address !== null ? `0x${f.address.toString(16).toUpperCase().padStart(8, "0")} · ` : ""}${bytes(f.size)} · ${f.fuzzy_match_percent >= 100 ? "matched" : `${f.fuzzy_match_percent.toFixed(1)}% match`}${f.functional ? ` · functional C (${f.functional} confidence)` : ""}${changeNote(changed?.get(`${f.name}@${f.address}`), levelChanges)}`,
+          change: changed?.get(`${f.name}@${f.address}`),
         }));
     }
     return units
-      .filter((u) => (!category || u.categories.includes(category)) && test(u))
+      .filter((u) => (!category || u.categories.includes(category)) && test(u) && keep(u.name))
       .map((u) => ({
         key: u.name,
         label: u.name,
         size: u.totalCode,
         matched: u.matchedCodePercent,
         fuzzy: u.fuzzy,
-        detail: `${bytes(u.totalCode)} · ${u.matchedCodePercent.toFixed(2)}% matched · ${fmt.format(u.matchedFunctions)} / ${fmt.format(u.totalFunctions)} functions`,
+        detail: `${bytes(u.totalCode)} · ${u.matchedCodePercent.toFixed(2)}% matched · ${fmt.format(u.matchedFunctions)} / ${fmt.format(u.totalFunctions)} functions${changeNote(changed?.get(u.name), levelChanges)}`,
         unit: u,
+        change: changed?.get(u.name),
       }));
-  }, [openUnit, loaded, units, category, query]);
+  }, [openUnit, shownFunctions, stale, units, category, query, levelChanges, onlyChanged]);
 
   // "Ordered": code order (units grouped by folder, functions by address); "size": biggest first.
   const { rects, groups } = useMemo((): { rects: Rect<Tile>[]; groups: Rect<string>[] } => {
@@ -298,6 +357,65 @@ export function UnitMap({
         </div>
       </div>
 
+      {levelChanges && !stale ? (
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-3" role="status">
+          {levelChanges.byKey.size ? (
+            <>
+              {levelChanges.up ? (
+                <span className="flex items-center gap-1.5 text-ink-2">
+                  <span className="size-2.5 rounded-sm" style={{ boxShadow: "inset 0 0 0 2px var(--good)" }} />
+                  {levelChanges.up} improved
+                </span>
+              ) : null}
+              {levelChanges.down ? (
+                <span className="flex items-center gap-1.5 text-ink-2">
+                  <span className="size-2.5 rounded-sm" style={{ boxShadow: "inset 0 0 0 2px var(--bad)" }} />
+                  {levelChanges.down} regressed
+                </span>
+              ) : null}
+              {levelChanges.added ? (
+                <span className="flex items-center gap-1.5 text-ink-2">
+                  <span className="size-2.5 rounded-sm" style={{ boxShadow: "inset 0 0 0 2px var(--accent)" }} />
+                  {levelChanges.added} new
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className="text-ink-2">No {openUnit ? "function" : "unit"} changed</span>
+          )}
+          <span>
+            between <span className="font-mono">{levelChanges.older.slice(0, 7)}</span> and{" "}
+            <span className="font-mono">{levelChanges.newer.slice(0, 7)}</span>
+          </span>
+          <span className="ml-auto flex items-center gap-2">
+            {levelChanges.byKey.size ? (
+              <button
+                type="button"
+                aria-pressed={onlyChanged}
+                onClick={() => setOnlyChanged((v) => !v)}
+                className={`rounded-md border px-2 py-0.5 ${onlyChanged ? "border-line-strong text-ink" : "border-line hover:text-ink"}`}
+              >
+                Only changed
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setChanges((c) => {
+                  const { [level]: _gone, ...rest } = c;
+                  return rest;
+                });
+                setOnlyChanged(false);
+              }}
+              className="rounded p-0.5 hover:text-ink"
+              aria-label="Hide changes"
+            >
+              <Close size={12} />
+            </button>
+          </span>
+        </div>
+      ) : null}
+
       {unit ? (
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-surface-2 px-3 py-2.5 text-xs text-ink-3">
           <div className="min-w-48 flex-1">
@@ -321,12 +439,14 @@ export function UnitMap({
       <div
         ref={grid}
         className="relative w-full overflow-hidden rounded-xl border border-line bg-bg"
+        data-changes={levelChanges?.byKey.size && !stale ? (levelChanges.n % 2 ? "a" : "b") : undefined}
         style={{ height: "clamp(360px, calc(100vh - 360px), 720px)" }}
         onMouseLeave={() => setFocus(null)}
       >
         {rects.map(({ item: t, x, y, w, h }) => (
           <button
-            key={t.key}
+            // A changed tile takes a new key per comparison, so its pulse plays again.
+            key={t.change && levelChanges ? `${t.key}~${levelChanges.older}:${levelChanges.newer}` : t.key}
             type="button"
             tabIndex={-1}
             onMouseEnter={() => setFocus(t)}
@@ -338,8 +458,9 @@ export function UnitMap({
               setSource(off || !openUnit ? null : { unit: openUnit, fn: t.label });
             }}
             aria-label={`${t.label}: ${t.detail}`}
-            className="absolute transition-[filter] duration-100 hover:brightness-125"
+            className={`absolute transition-[filter] duration-100 hover:brightness-125 ${t.change ? "tile-change" : ""}`}
             style={{
+              ...(t.change ? ({ "--change": CHANGE_COLOR[t.change.kind] } as React.CSSProperties) : {}),
               left: x,
               top: y,
               width: w,
@@ -357,14 +478,24 @@ export function UnitMap({
             style={{ left: g.x, top: g.y, width: g.w, height: g.h, boxShadow: "inset 0 0 0 1.5px var(--seam-strong)" }}
           />
         ))}
-        {openUnit && !loaded ? <p className="absolute inset-0 grid place-items-center text-sm text-ink-3">Loading functions…</p> : null}
+        {openUnit && !loaded && !stale ? (
+          <p className="absolute inset-0 grid place-items-center text-sm text-ink-3">Loading functions…</p>
+        ) : null}
+        {stale ? (
+          <p className="pointer-events-none absolute top-2 right-2 rounded-md border border-line bg-surface/90 px-2 py-1 text-xs text-ink-2">
+            Loading this commit…
+          </p>
+        ) : null}
         {loaded === "error" ? (
           <p className="absolute inset-0 grid place-items-center text-sm text-bad">Could not load this unit&apos;s functions.</p>
+        ) : null}
+        {onlyChanged && rects.length === 0 && box.w ? (
+          <p className="absolute inset-0 grid place-items-center text-sm text-ink-3">Nothing here changed.</p>
         ) : null}
         {openUnit && !unit && Array.isArray(loaded) && loaded.length === 0 ? (
           <p className="absolute inset-0 grid place-items-center text-sm text-ink-3">This unit has no functions.</p>
         ) : null}
-        {!openUnit && rects.length === 0 && box.w ? (
+        {!openUnit && !onlyChanged && rects.length === 0 && box.w ? (
           <p className="absolute inset-0 grid place-items-center text-sm text-ink-3">No units match.</p>
         ) : null}
       </div>

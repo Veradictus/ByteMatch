@@ -612,6 +612,8 @@ export async function ProjectView({
                   repo={project.repo}
                   version={r.version}
                   commit={commit ? row.commitSha : null}
+                  sha={unitsRow!.commitSha}
+                  time={unitsRow!.commitTimestamp.getTime()}
                 />
               </Suspense>
             ) : (

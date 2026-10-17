@@ -470,6 +470,58 @@ kbd {
   flex-shrink: 0;
   height: 100%;
 }
+/* A map tile that changed since the commit the viewer came from: a ring in its change's colour
+   with a dark inner edge (so it shows on a tile of the same colour), and a few pulses of it across
+   the tile when it first shows. While they pulse, the tiles that didn't change dim, so even small
+   changed tiles stand out; the attribute alternates between comparisons to restart that. */
+.tile-change::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 2px var(--change),
+    inset 0 0 0 3.5px color-mix(in srgb, var(--bg) 85%, transparent);
+  animation: tile-change-pulse 1.1s ease-out 3;
+}
+@keyframes tile-change-pulse {
+  0% {
+    background: color-mix(in srgb, var(--change) 55%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+[data-changes="a"] > button:not(.tile-change) {
+  animation: tile-dim-a 3.4s ease-in-out;
+}
+[data-changes="b"] > button:not(.tile-change) {
+  animation: tile-dim-b 3.4s ease-in-out;
+}
+@keyframes tile-dim-a {
+  0%,
+  70% {
+    filter: brightness(0.45) saturate(0.6);
+  }
+  100% {
+    filter: none;
+  }
+}
+@keyframes tile-dim-b {
+  0%,
+  70% {
+    filter: brightness(0.45) saturate(0.6);
+  }
+  100% {
+    filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-change::after,
+  [data-changes] > button {
+    animation: none !important;
+  }
+}
 /* The opened unit's bar on the map: a little taller, with an edge so it reads against its panel. */
 .match-track.unit-progress {
   height: 1.5rem;
