@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef, useTransition } from "react";
 import type { FormState } from "./actions";
 
 type Action = (state: FormState, form: FormData) => Promise<FormState>;
@@ -19,15 +19,30 @@ export function ActionForm({
   children,
   submit,
   className,
+  resetOnSuccess = false,
 }: {
   action: Action;
   children: React.ReactNode;
   submit: string;
   className?: string;
+  /** Clear the fields once it worked (forms that add something); they're always kept on an error. */
+  resetOnSuccess?: boolean;
 }) {
   const [state, run, pending] = useActionState(action, {});
+  const [, startTransition] = useTransition();
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (resetOnSuccess && state.message && !state.error) form.current?.reset();
+  }, [state, resetOnSuccess]);
+  // Submitted by hand rather than through `action`, which would clear every field even when the
+  // server answers with an error to fix.
+  const submitForm = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    startTransition(() => run(data));
+  };
   return (
-    <form action={run} className={className ?? "grid gap-3"}>
+    <form ref={form} onSubmit={submitForm} className={className ?? "grid gap-3"}>
       {children}
       <div className="flex items-center gap-3">
         <button disabled={pending} className="btn btn-primary">
