@@ -11,6 +11,7 @@ import { byProgress, gameArt, loadGames, redirectSlug } from "@/lib/game-data";
 import { platformName } from "@/lib/platforms";
 import { breadcrumbJsonLd, browseMetadata, gameJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/json-ld";
+import { coverStyle } from "@/lib/images";
 import { PortList } from "@/components/port-list";
 import { portsByGame } from "@/lib/port-data";
 
@@ -89,7 +90,13 @@ export default async function GamePage({ params }: Params) {
       </nav>
 
       <section className="panel overflow-hidden">
-        {art.cover ? <ExternalImage src={art.cover} className="aspect-[3/1] max-h-64 w-full border-b border-line object-cover" /> : null}
+        {art.cover ? (
+          <ExternalImage
+            src={art.cover}
+            style={coverStyle(art.coverPosition)}
+            className="aspect-[3/1] max-h-64 w-full border-b border-line object-cover"
+          />
+        ) : null}
         <div className="flex items-start gap-4 p-6 sm:p-7">
           {art.icon ? (
             <ExternalImage src={art.icon} className="size-14 shrink-0 rounded-xl border border-line object-cover sm:size-16" />

@@ -127,6 +127,13 @@
       "when": 1792229587829,
       "tag": "0017_igdb_id",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792231102433,
+      "tag": "0018_cover_position",
+      "breakpoints": true
     }
   ]
 }

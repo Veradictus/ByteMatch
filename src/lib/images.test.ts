@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { checkImageUrl } from "./images";
+import { checkImageUrl, coverPositionFrom } from "./images";
+
+describe("coverPositionFrom", () => {
+  it("clamps, rounds, and stores the middle as nothing", () => {
+    expect(coverPositionFrom("12.345", "130")).toEqual({ x: 12.3, y: 100 });
+    expect(coverPositionFrom("50", "50")).toBeNull();
+    expect(coverPositionFrom(null, "nope")).toBeNull();
+    expect(coverPositionFrom("0", undefined)).toEqual({ x: 0, y: 50 });
+  });
+});
 
 describe("checkImageUrl", () => {
   it("accepts https links and clears on empty", () => {

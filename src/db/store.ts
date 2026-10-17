@@ -251,6 +251,7 @@ export async function projectIndex() {
     measures: Measures | null;
     commit_timestamp: string | null;
     image_url: string | null;
+    cover_position: { x: number; y: number } | null;
     icon_url: string | null;
     created_at: string;
     /** Matched-code percentage points gained over the last 30 days (since the first report if newer). */
@@ -262,7 +263,7 @@ export async function projectIndex() {
     listed_at: string | null;
   }>(dsql`
     select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.igdb_id, p.version_games,
-           p.image_url, p.icon_url, p.created_at,
+           p.image_url, p.cover_position, p.icon_url, p.created_at,
            r.version, r.measures, r.commit_timestamp,
            (r.measures->>'matched_code_percent')::float8 - (b.measures->>'matched_code_percent')::float8 as gain_30d,
            since.at as progressed_at, p.bumped_at, greatest(since.at, p.bumped_at) as listed_at

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Game } from "@/lib/games";
 import { bestPercent, gameArt, type GameRow } from "@/lib/game-data";
 import { platformName } from "@/lib/platforms";
+import { coverStyle } from "@/lib/images";
 import { ExternalImage } from "./external-image";
 import { ProgressBar } from "./progress-bar";
 
@@ -27,6 +28,7 @@ export function GameCard({ game, showFranchise = true }: { game: Game<GameRow>; 
         {art.cover ? (
           <ExternalImage
             src={art.cover}
+            style={coverStyle(art.coverPosition)}
             className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.03]"
             fallback={<Placeholder title={game.title} />}
           />

@@ -11,7 +11,7 @@ import { userClient } from "@/github/client";
 import { enqueue, JOBS } from "@/lib/queue";
 import { clearProblems } from "@/ingest/github";
 import { cleanName, cleanYear } from "@/lib/games";
-import { checkImageUrl } from "@/lib/images";
+import { checkImageUrl, coverPositionFrom } from "@/lib/images";
 import { registrationOpen } from "@/lib/settings";
 import { checkDiscordUrl } from "@/lib/links";
 import { nextBump } from "@/lib/bump";
@@ -260,13 +260,15 @@ export async function setImageUrl(owner: string, repo: string, kind: "cover" | "
   const project = await managed(owner, repo);
   const checked = checkImageUrl(String(form.get("imageUrl") ?? ""));
   if ("error" in checked) return { error: checked.error };
+  const cover = { imageUrl: checked.url, coverPosition: checked.url ? coverPositionFrom(form.get("posX"), form.get("posY")) : null };
   await db()
     .update(projects)
-    .set({ ...(kind === "icon" ? { iconUrl: checked.url } : { imageUrl: checked.url }), updatedAt: new Date() })
+    .set({ ...(kind === "icon" ? { iconUrl: checked.url } : cover), updatedAt: new Date() })
     .where(eq(projects.id, project.id));
   revalidatePath(`/manage/${owner}/${repo}`);
   revalidatePath(`/${owner}/${repo}`);
   revalidatePath("/");
+  revalidatePath("/games", "layout");
   const what = kind === "icon" ? "Icon" : "Cover";
   return { message: checked.url ? `${what} saved.` : `${what} removed.` };
 }

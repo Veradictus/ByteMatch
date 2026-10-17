@@ -11,6 +11,7 @@ export type GameRow = ProjectRow & {
   releaseYear: number | null;
   igdbId: number | null;
   cover: string | null;
+  coverPosition: { x: number; y: number } | null;
 };
 
 const row = (p: Awaited<ReturnType<typeof projectIndex>>[number]): GameRow => ({
@@ -32,6 +33,7 @@ const row = (p: Awaited<ReturnType<typeof projectIndex>>[number]): GameRow => ({
   createdAt: new Date(p.created_at).toISOString(),
   image: p.icon_url,
   cover: p.image_url,
+  coverPosition: p.cover_position,
 });
 
 /**
@@ -106,9 +108,14 @@ export function byProgress(a: GameRow, b: GameRow) {
 }
 
 /** The picture that stands for a game: the cover (else icon) of its furthest-along project that has one. */
-export function gameArt(g: Game<GameRow>): { cover: string | null; icon: string | null } {
+export function gameArt(g: Game<GameRow>): { cover: string | null; coverPosition: GameRow["coverPosition"]; icon: string | null } {
   const sorted = [...g.projects].sort(byProgress);
-  return { cover: sorted.find((p) => p.cover)?.cover ?? null, icon: sorted.find((p) => p.image)?.image ?? null };
+  const withCover = sorted.find((p) => p.cover);
+  return {
+    cover: withCover?.cover ?? null,
+    coverPosition: withCover?.coverPosition ?? null,
+    icon: sorted.find((p) => p.image)?.image ?? null,
+  };
 }
 
 /** The highest code-matched percentage among the game's projects. */

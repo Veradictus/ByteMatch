@@ -7,6 +7,7 @@ import { breadcrumbJsonLd, projectCanonicalPath, projectJsonLd, projectSeoInput 
 import { JsonLd } from "./json-ld";
 import { config } from "@/lib/config";
 import { slugify } from "@/lib/games";
+import { coverStyle } from "@/lib/images";
 import { portGame } from "@/lib/ports";
 import { projectPorts } from "@/db/ports";
 import { PortList } from "./port-list";
@@ -435,6 +436,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
             {project.imageUrl ? (
               <ExternalImage
                 src={project.imageUrl}
+                style={coverStyle(project.coverPosition)}
                 className="aspect-[3/1] max-h-56 w-full rounded-t-[calc(var(--radius-panel)-1px)] border-b border-line object-cover"
               />
             ) : null}

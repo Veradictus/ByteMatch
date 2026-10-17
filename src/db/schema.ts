@@ -83,6 +83,8 @@ export const projects = pgTable(
     errorSince: timestamp("error_since", { withTimezone: true }),
     /** An https link to the project's cover (the banner on its page), hosted elsewhere; ByteMatch never stores images. */
     imageUrl: text("image_url"),
+    /** Which point of the cover stays in view when a frame crops it: percentages from the left and top (50, 50 is the middle). */
+    coverPosition: jsonb("cover_position").$type<CoverPosition>(),
     /** An https link to the project's square icon (list thumbnail and next to its name), hosted elsewhere. */
     iconUrl: text("icon_url"),
     /** The project's Discord invite (discord.gg / discord.com/invite), shown on its page. */
@@ -394,6 +396,11 @@ export const ports = pgTable(
   },
   (t) => [index("ports_project_idx").on(t.projectId)],
 );
+
+export interface CoverPosition {
+  x: number;
+  y: number;
+}
 
 export interface VersionGame {
   game: string;

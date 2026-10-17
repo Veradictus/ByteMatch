@@ -402,6 +402,7 @@ export default async function ManageProject({ params, searchParams }: Params) {
           <ImageForm
             shape="wide"
             current={project.imageUrl}
+            position={project.coverPosition}
             name={project.name}
             action={setImageUrl.bind(null, project.owner, project.repo, "cover")}
           />
