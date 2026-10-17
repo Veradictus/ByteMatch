@@ -15,6 +15,8 @@ import { checkImageUrl } from "@/lib/images";
 import { registrationOpen } from "@/lib/settings";
 import { checkDiscordUrl } from "@/lib/links";
 import { nextBump } from "@/lib/bump";
+import { checkPort } from "@/lib/ports";
+import { addPort as insertPort, PortLimitError, removePort as deletePort } from "@/db/ports";
 import { createToken, revokeToken } from "@/lib/tokens";
 import { checkVersion, HistoryError, MAX_HISTORY_BYTES, parseHistory, storeHistory } from "@/ingest/history";
 
@@ -208,6 +210,45 @@ export async function deleteToken(owner: string, repo: string, form: FormData) {
   const project = await managed(owner, repo);
   await revokeToken(project.id, Number(form.get("id")));
   revalidatePath(`/manage/${owner}/${repo}`);
+}
+
+/** Lists a port built from the project (src/lib/ports.ts). */
+export async function addPort(owner: string, repo: string, _: FormState, form: FormData): Promise<FormState> {
+  const session = await requireSession();
+  const project = await managed(owner, repo);
+  const versions = (await projectVersions(project.id)).map((v) => v.version);
+  const checked = checkPort(
+    {
+      name: form.get("name"),
+      url: form.get("url"),
+      platforms: form.getAll("platforms"),
+      status: form.get("status"),
+      version: form.get("version"),
+      note: form.get("note"),
+    },
+    versions,
+  );
+  if ("error" in checked) return { error: checked.error };
+  try {
+    await insertPort(project.id, checked.port, session.user.id);
+  } catch (e) {
+    if (e instanceof PortLimitError) return { error: e.message };
+    throw e;
+  }
+  revalidatePorts(owner, repo);
+  return { message: `Listed ${checked.port.name}.` };
+}
+
+export async function removePort(owner: string, repo: string, form: FormData) {
+  const project = await managed(owner, repo);
+  await deletePort(project.id, Number(form.get("id")));
+  revalidatePorts(owner, repo);
+}
+
+function revalidatePorts(owner: string, repo: string) {
+  revalidatePath(`/manage/${owner}/${repo}`);
+  revalidatePath(`/${owner}/${repo}`);
+  revalidatePath("/ports");
 }
 
 /** Sets the project's cover (banner) or icon (square thumbnail) link; empty removes it. */

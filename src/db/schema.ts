@@ -366,6 +366,33 @@ export const trafficReferrers = pgTable(
   (t) => [primaryKey({ columns: [t.day, t.host] })],
 );
 
+/**
+ * Ports built from a project's decompilation (a native PC version, say), listed by its maintainers
+ * on the project's page, its game's page and /ports. ByteMatch only links to them.
+ */
+export const ports = pgTable(
+  "ports",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Its home: a repository, releases page or website (https). */
+    url: text("url").notNull(),
+    /** Ids from PORT_PLATFORMS (src/lib/ports.ts). */
+    platforms: jsonb("platforms").$type<string[]>().notNull().default([]),
+    /** One of PORT_STATUSES. */
+    status: text("status").notNull(),
+    /** The version it's built from, when it's one of several (and so which game, for a repository of several). */
+    version: text("version"),
+    note: text("note"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: created(),
+  },
+  (t) => [index("ports_project_idx").on(t.projectId)],
+);
+
 export interface VersionGame {
   game: string;
   franchise?: string | null;
@@ -376,3 +403,4 @@ export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
 export type ReportRow = typeof reports.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type Port = typeof ports.$inferSelect;

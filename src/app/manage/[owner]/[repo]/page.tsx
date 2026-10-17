@@ -11,13 +11,15 @@ import { projectProblem, skippedRuns } from "@/lib/project-problems";
 import { ProblemPanel } from "@/components/problem-panel";
 import { PLATFORMS } from "@/lib/platforms";
 import { listTokens } from "@/lib/tokens";
-import { deleteToken, newToken, runAction, setImageUrl, updateProject, uploadHistory } from "../../actions";
+import { addPort, deleteToken, newToken, removePort, runAction, setImageUrl, updateProject, uploadHistory } from "../../actions";
 import { ImageForm } from "../../image-form";
 import { Select } from "@/components/ui/select";
 import { ChevronRight } from "@/components/ui/icons";
 import { ActionButtons, ActionForm, inputClass } from "../../forms";
 import { LocalTime } from "@/components/local-time";
 import { BUMP_COOLDOWN_HOURS, nextBump } from "@/lib/bump";
+import { MAX_PORTS, PORT_PLATFORMS, PORT_STATUSES, portHost } from "@/lib/ports";
+import { projectPorts } from "@/db/ports";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +52,10 @@ export default async function ManageProject({ params, searchParams }: Params) {
   const project = await findProject(owner, repo);
   if (!project || !(await canManage(session, project))) notFound();
   const [problem, skipped] = await Promise.all([projectProblem(project), skippedRuns(project.id)]);
-  const [versions, tokens, names, { added }] = await Promise.all([
+  const [versions, tokens, portList, names, { added }] = await Promise.all([
     projectVersions(project.id),
     listTokens(project.id),
+    projectPorts(project.id),
     loadGames(),
     searchParams,
   ]);
@@ -423,6 +426,79 @@ export default async function ManageProject({ params, searchParams }: Params) {
             action={setImageUrl.bind(null, project.owner, project.repo, "cover")}
           />
         </div>
+      </Card>
+
+      <Card title="Ports">
+        <p className="mb-4 text-sm text-ink-2">
+          Games built from this decompilation for other systems, like a native PC version. They&apos;re listed on the project&apos;s page,
+          its game&apos;s page and{" "}
+          <Link href="/ports" className="text-accent hover:underline">
+            Ports
+          </Link>
+          , linking to wherever the port lives; ByteMatch hosts nothing. Up to {MAX_PORTS}.
+        </p>
+        {portList.length ? (
+          <ul className="mb-4 divide-y divide-line text-sm">
+            {portList.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                <a href={p.url} rel="noopener noreferrer nofollow" target="_blank" className="font-medium hover:underline">
+                  {p.name}
+                </a>
+                <span className="text-xs text-ink-3">
+                  {PORT_STATUSES[p.status as keyof typeof PORT_STATUSES]?.label ?? p.status} ·{" "}
+                  {p.platforms.map((x) => PORT_PLATFORMS[x as keyof typeof PORT_PLATFORMS] ?? x).join(", ")}
+                  {p.version ? ` · from ${p.version}` : ""} · {portHost(p.url)}
+                </span>
+                <form action={removePort.bind(null, project.owner, project.repo)} className="ml-auto">
+                  <input type="hidden" name="id" value={p.id} />
+                  <button className="text-xs text-bad">Remove</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {portList.length < MAX_PORTS ? (
+          <ActionForm action={addPort.bind(null, project.owner, project.repo)} submit="Add port" className="grid gap-4" resetOnSuccess>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Name" hint="e.g. OpenRAC">
+                <input name="name" required maxLength={80} className={inputClass} />
+              </Field>
+              <Field label="Link" hint="repository, releases or website">
+                <input name="url" required type="url" placeholder="https://github.com/…" className={inputClass} />
+              </Field>
+              <Field label="How far along">
+                <Select
+                  name="status"
+                  defaultValue="progress"
+                  options={Object.entries(PORT_STATUSES).map(([value, s]) => ({ value, label: `${s.label}: ${s.hint.toLowerCase()}` }))}
+                />
+              </Field>
+              {versions.length > 1 ? (
+                <Field label="Built from" hint="optional">
+                  <Select
+                    name="version"
+                    defaultValue=""
+                    options={[{ value: "", label: "Any version" }, ...versions.map((v) => ({ value: v.version, label: v.version }))]}
+                  />
+                </Field>
+              ) : null}
+            </div>
+            <fieldset className="grid gap-1.5 text-sm">
+              <legend className="mb-1.5">Runs on</legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {Object.entries(PORT_PLATFORMS).map(([value, label]) => (
+                  <label key={value} className="flex items-center gap-2">
+                    <input type="checkbox" name="platforms" value={value} className="size-4 accent-[var(--accent-strong)]" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <Field label="Note" hint="optional, one line">
+              <input name="note" maxLength={200} placeholder="e.g. needs your own copy of the game" className={inputClass} />
+            </Field>
+          </ActionForm>
+        ) : null}
       </Card>
 
       <Card title="Upload tokens">

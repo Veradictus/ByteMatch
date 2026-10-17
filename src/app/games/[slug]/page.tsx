@@ -11,6 +11,8 @@ import { byProgress, gameArt, loadGames, redirectSlug } from "@/lib/game-data";
 import { platformName } from "@/lib/platforms";
 import { breadcrumbJsonLd, browseMetadata, gameJsonLd } from "@/lib/seo";
 import { JsonLd } from "@/components/json-ld";
+import { PortList } from "@/components/port-list";
+import { portsByGame } from "@/lib/port-data";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,7 @@ export default async function GamePage({ params }: Params) {
       })),
     )
   ).filter((s) => s.points.length);
+  const ports = (await portsByGame()).find((g) => g.game?.key === game.key)?.ports ?? [];
   const siblings = game.franchiseSlug ? games.filter((g) => g.franchiseSlug === game.franchiseSlug && g.slug !== game.slug) : [];
 
   return (
@@ -113,6 +116,20 @@ export default async function GamePage({ params }: Params) {
         <h2 className="mb-3 text-sm font-semibold">Projects</h2>
         <ProjectList rows={projects} empty="No projects." />
       </section>
+
+      {ports.length ? (
+        <section>
+          <h2 className="mb-3 flex items-baseline gap-2 text-sm font-semibold">
+            Ports
+            <Link href="/ports" className="text-xs font-normal text-accent hover:underline">
+              All ports
+            </Link>
+          </h2>
+          <div className="panel overflow-hidden">
+            <PortList ports={ports} />
+          </div>
+        </section>
+      ) : null}
 
       {siblings.length ? (
         <section>

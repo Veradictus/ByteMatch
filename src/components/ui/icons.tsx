@@ -59,6 +59,12 @@ export const ArrowRight = (p: IconProps) => (
   </Svg>
 );
 
+export const ArrowUpRight = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 11l6-6M6 5h5v5" />
+  </Svg>
+);
+
 export const Plus = (p: IconProps) => (
   <Svg {...p}>
     <path d="M8 3v10M3 8h10" />

@@ -7,6 +7,9 @@ import { breadcrumbJsonLd, projectCanonicalPath, projectJsonLd, projectSeoInput 
 import { JsonLd } from "./json-ld";
 import { config } from "@/lib/config";
 import { slugify } from "@/lib/games";
+import { portGame } from "@/lib/ports";
+import { projectPorts } from "@/db/ports";
+import { PortList } from "./port-list";
 import { platformName } from "@/lib/platforms";
 import { publicError } from "@/lib/errors";
 import { HIDE_AFTER_DAYS, hiddenFromPublic, unreachable } from "@/lib/visibility";
@@ -305,11 +308,14 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
   const { project, measures: m, row } = r;
   const base = `/${project.owner}/${project.repo}`;
   const pagePath = version ? `${base}/${encodeURIComponent(r.version)}` : base;
-  const [rows, latestFull, imported] = await Promise.all([
+  const [rows, latestFull, imported, portRows] = await Promise.all([
     history(project.id, r.version),
     commit ? Promise.resolve(undefined) : latestFullReport(project.id, r.version),
     hasImportedHistory(project.id),
+    projectPorts(project.id),
   ]);
+  // A port of another game this repository holds (see versionGames) belongs on that game's pages.
+  const shownPorts = portRows.filter((p) => portGame(p, project) === portGame({ version: r.version }, project));
   // A past commit shows its own units (if its full report is stored); the latest view shows the newest stored breakdown.
   const unitsRow = commit ? (row.blobId ? row : undefined) : latestFull;
   const report = unitsRow ? await loadReport(unitsRow) : null;
@@ -607,6 +613,12 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
               )}
             </div>
           </Side>
+
+          {shownPorts.length ? (
+            <Side title="Ports" aside={`${shownPorts.length}`}>
+              <PortList ports={shownPorts} compact />
+            </Side>
+          ) : null}
 
           <Side
             title="History"

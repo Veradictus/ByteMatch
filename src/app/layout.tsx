@@ -121,6 +121,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   links={[
                     { href: "/", label: "Projects" },
                     { href: "/games", label: "Games" },
+                    { href: "/ports", label: "Ports" },
                     { href: "/activity", label: "Activity" },
                     { href: "/docs", label: "Docs" },
                     { href: "/manage/new", label: "Submit a project" },

@@ -72,7 +72,7 @@ export async function gameRows(): Promise<GameRow[]> {
 export async function loadGames() {
   const [rows, aliases] = await Promise.all([gameRows(), loadAliases()]);
   const games = groupGames(rows, aliases);
-  return { games, franchises: groupFranchises(games), unassigned: rows.filter((r) => !r.game).length, aliases };
+  return { games, franchises: groupFranchises(games), unassigned: rows.filter((r) => !r.game).length, aliases, rows };
 }
 
 /**
