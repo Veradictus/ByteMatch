@@ -10,6 +10,12 @@ export const DOCS = [
     summary: "Track your project: register it, upload reports, add badges.",
   },
   {
+    slug: "setup-prompt",
+    file: "docs/setup-prompt.md",
+    group: "Projects",
+    summary: "A prompt for a coding assistant to wire a repository up, and how units are read.",
+  },
+  {
     slug: "migrating-from-decomp-dev",
     file: "docs/migrating-from-decomp-dev.md",
     group: "Projects",

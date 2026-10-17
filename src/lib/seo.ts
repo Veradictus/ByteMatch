@@ -281,6 +281,12 @@ export const DOCS_SEO: Record<string, { title: string; absoluteTitle?: boolean; 
       "Register a matching decompilation project on ByteMatch, deliver objdiff reports from GitHub Actions or the upload API, and add progress badges to your README.",
     keywords: ["objdiff report", "decompilation progress badge", "dtk-template"],
   },
+  "setup-prompt": {
+    title: "Set up a decompilation for ByteMatch with an AI assistant",
+    description:
+      "A prompt for Claude Code, Cursor or Copilot that wires a decompilation repository up for ByteMatch: objdiff units, the CI report artifact and a badge, plus how units become the project page.",
+    keywords: ["objdiff.json", "objdiff units", "decompilation CI"],
+  },
   "migrating-from-decomp-dev": {
     // Aimed at people searching for "decomp.dev". Accurate: decomp.dev is closed to new projects and being sunset.
     title: "decomp.dev is being sunset: move your project to ByteMatch",
