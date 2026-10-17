@@ -36,7 +36,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
     linkedPercent: p.measures ? Number(p.measures.complete_code_percent) : null,
     fuzzyPercent: p.measures ? Number(p.measures.fuzzy_match_percent) : null,
     functions: p.measures ? { done: Number(p.measures.matched_functions), total: Number(p.measures.total_functions) } : null,
-    updated: p.commit_timestamp ? new Date(p.commit_timestamp).toISOString() : null,
+    updated: p.listed_at ? new Date(p.listed_at).toISOString() : null,
     matchedFunctions: p.measures ? Number(p.measures.matched_functions) : null,
     totalCode: p.measures ? Number(p.measures.total_code) : null,
     gain30: p.gain_30d === null ? null : Number(p.gain_30d),

@@ -17,6 +17,7 @@ import { Select } from "@/components/ui/select";
 import { ChevronRight } from "@/components/ui/icons";
 import { ActionButtons, ActionForm, inputClass } from "../../forms";
 import { LocalTime } from "@/components/local-time";
+import { BUMP_COOLDOWN_HOURS, nextBump } from "@/lib/bump";
 
 export const dynamic = "force-dynamic";
 
@@ -165,6 +166,25 @@ export default async function ManageProject({ params, searchParams }: Params) {
             )}
           </p>
         ) : null}
+      </Card>
+
+      <Card title="Recently updated">
+        <p className="mb-3 text-sm text-ink-2">
+          The project list puts projects whose matched code, functions or data last changed first, so commits that change no numbers (a
+          tooling update across all your projects, say) don&apos;t move it. To announce other news, like a new tool or a playable build,
+          bump it: it counts as updated now. One bump a day ({BUMP_COOLDOWN_HOURS} hours).
+        </p>
+        {nextBump(project.bumpedAt) ? (
+          <p className="text-sm text-ink-3">
+            Bumped <LocalTime value={project.bumpedAt!} />; the next bump is possible from <LocalTime value={nextBump(project.bumpedAt)!} />
+            .
+          </p>
+        ) : (
+          <ActionButtons
+            action={runAction.bind(null, project.owner, project.repo)}
+            buttons={[{ value: "bump", label: "Bump to the top", hint: "List the project as updated now" }]}
+          />
+        )}
       </Card>
 
       <Card title="History">

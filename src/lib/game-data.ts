@@ -25,7 +25,7 @@ const row = (p: Awaited<ReturnType<typeof projectIndex>>[number]): GameRow => ({
   version: p.version,
   codePercent: p.measures ? Number(p.measures.matched_code_percent) : null,
   functions: p.measures ? { done: Number(p.measures.matched_functions), total: Number(p.measures.total_functions) } : null,
-  updated: p.commit_timestamp ? new Date(p.commit_timestamp).toISOString() : null,
+  updated: p.listed_at ? new Date(p.listed_at).toISOString() : null,
   gain30: p.gain_30d === null ? null : Number(p.gain_30d),
   createdAt: new Date(p.created_at).toISOString(),
   image: p.icon_url,

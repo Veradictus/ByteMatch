@@ -102,6 +102,11 @@ export const projects = pgTable(
      * project's game.
      */
     versionGames: jsonb("version_games").$type<Record<string, VersionGame>>().notNull().default({}),
+    /**
+     * When a maintainer last moved the project up "Recently updated" by hand, for work a report
+     * doesn't show as progress (src/lib/bump.ts).
+     */
+    bumpedAt: timestamp("bumped_at", { withTimezone: true }),
     createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: created(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

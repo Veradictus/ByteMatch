@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { canManage, canManageRepo, currentSession } from "@/auth/session";
 import { db } from "@/db/client";
 import { projects, type Project, type VersionGame } from "@/db/schema";
-import { findProject, latestArtifactRun } from "@/db/store";
+import { findProject, latestArtifactRun, projectVersions } from "@/db/store";
 import { userClient } from "@/github/client";
 import { enqueue, JOBS } from "@/lib/queue";
 import { clearProblems } from "@/ingest/github";
@@ -14,6 +14,7 @@ import { cleanName, cleanYear } from "@/lib/games";
 import { checkImageUrl } from "@/lib/images";
 import { registrationOpen } from "@/lib/settings";
 import { checkDiscordUrl } from "@/lib/links";
+import { nextBump } from "@/lib/bump";
 import { createToken, revokeToken } from "@/lib/tokens";
 import { checkVersion, HistoryError, MAX_HISTORY_BYTES, parseHistory, storeHistory } from "@/ingest/history";
 
@@ -172,6 +173,14 @@ export async function runAction(owner: string, repo: string, _: FormState, form:
       if (!runId) return { error: "No report from a CI run to read again yet." };
       await enqueue(JOBS.ingestRun, { projectId: project.id, runId, force: true }, `reread:${runId}`);
       return { message: `Queued: reading CI run ${runId} again.` };
+    }
+    case "bump": {
+      const wait = nextBump(project.bumpedAt);
+      if (wait) return { error: `Bumped already today; the next bump is possible from ${wait.toUTCString()}.` };
+      if (!(await projectVersions(project.id)).length) return { error: "Nothing to show yet: bump once the project has a report." };
+      await db().update(projects).set({ bumpedAt: new Date() }).where(eq(projects.id, project.id));
+      revalidatePath(`/manage/${owner}/${repo}`);
+      return { message: "Bumped: the project is at the top of Recently updated until another project moves past it." };
     }
     case "retry-skipped": {
       const n = await clearProblems(project.id);

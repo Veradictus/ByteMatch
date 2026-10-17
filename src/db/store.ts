@@ -226,6 +226,14 @@ export async function history(projectId: number, version: string) {
 }
 
 /** Every enabled project with its default version's latest measures, for the index. */
+/**
+ * The measures that count as progress for "Recently updated". A commit that changes none of them
+ * (a tooling update, a rename, a rebuild across all of someone's projects at once) doesn't move a
+ * project up the list. Fuzzy match and totals are left out: a new objdiff or a changed split can shift them with no work done.
+ */
+export const PROGRESS_MEASURES = ["matched_code", "matched_functions", "complete_code", "matched_data"] as const;
+const progressKey = (col: string) => dsql.raw(`row(${PROGRESS_MEASURES.map((m) => `(${col}->>'${m}')::numeric`).join(", ")})`);
+
 export async function projectIndex() {
   const rows = await db().execute<{
     id: number;
@@ -246,11 +254,17 @@ export async function projectIndex() {
     created_at: string;
     /** Matched-code percentage points gained over the last 30 days (since the first report if newer). */
     gain_30d: number | null;
+    /** The commit that last changed the shown version's progress (see PROGRESS_MEASURES). */
+    progressed_at: string | null;
+    bumped_at: string | null;
+    /** Where "Recently updated" puts it: the later of the two above. */
+    listed_at: string | null;
   }>(dsql`
     select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.version_games,
            p.image_url, p.icon_url, p.created_at,
            r.version, r.measures, r.commit_timestamp,
-           (r.measures->>'matched_code_percent')::float8 - (b.measures->>'matched_code_percent')::float8 as gain_30d
+           (r.measures->>'matched_code_percent')::float8 - (b.measures->>'matched_code_percent')::float8 as gain_30d,
+           since.at as progressed_at, p.bumped_at, greatest(since.at, p.bumped_at) as listed_at
     from ${projects} p
     left join lateral (
       select version, measures, commit_timestamp from ${reports} r
@@ -267,6 +281,17 @@ export async function projectIndex() {
                o.commit_timestamp asc
       limit 1
     ) b on true
+    -- The newest report whose progress differs from the latest's; the plateau since began after it.
+    left join lateral (
+      select o.commit_timestamp from ${reports} o
+      where o.project_id = p.id and o.version = r.version and ${progressKey("o.measures")} is distinct from ${progressKey("r.measures")}
+      order by o.commit_timestamp desc, o.id desc limit 1
+    ) prior on true
+    left join lateral (
+      select min(n.commit_timestamp) as at from ${reports} n
+      where n.project_id = p.id and n.version = r.version
+        and (prior.commit_timestamp is null or n.commit_timestamp > prior.commit_timestamp)
+    ) since on true
     where p.enabled
       and (p.last_error is null
            or (r.version is not null

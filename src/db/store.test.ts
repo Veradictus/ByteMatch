@@ -93,6 +93,28 @@ describe.skipIf(!TEST_DB)("store", () => {
     expect(await loadReport((await latestReport(p.id, "v"))!)).not.toBeNull();
   });
 
+  it("lists a project as updated when its progress last changed, or when bumped", async () => {
+    const { db } = await import("./client");
+    const { projects } = await import("./schema");
+    const { eq } = await import("drizzle-orm");
+    const p = await makeProject();
+    const m = report().measures;
+    const at = (d: string) => ({ sha: d, timestamp: new Date(d) });
+    await storeMeasuresOnly(p, "v", [
+      { commit: at("2026-10-01"), measures: { ...m, matched_functions: 1 } },
+      { commit: at("2026-10-02"), measures: { ...m, matched_functions: 2 } },
+      // Tooling commits: fuzzy and totals move, matched numbers don't.
+      { commit: at("2026-10-03"), measures: { ...m, matched_functions: 2, fuzzy_match_percent: 1 } },
+      { commit: at("2026-10-04"), measures: { ...m, matched_functions: 2, total_code: m.total_code + 4 } },
+    ]);
+    const listed = async () => (await projectIndex()).find((x) => x.id === p.id)!;
+    expect(new Date((await listed()).listed_at!)).toEqual(new Date("2026-10-02"));
+    expect(new Date((await listed()).commit_timestamp!)).toEqual(new Date("2026-10-04"));
+    const bumped = new Date("2026-10-05");
+    await db().update(projects).set({ bumpedAt: bumped }).where(eq(projects.id, p.id));
+    expect(new Date((await listed()).listed_at!)).toEqual(bumped);
+  });
+
   it("keeps projects whose repositories are gone, or that never synced, off the public list", async () => {
     const { db } = await import("./client");
     const { projects } = await import("./schema");
