@@ -2,7 +2,9 @@ import Link from "next/link";
 import { LocalTime } from "@/components/local-time";
 import { loadGames } from "@/lib/game-data";
 import { resolveKey, similarKeys } from "@/lib/games";
-import { mergeNamesAction, unmergeNameAction } from "../actions";
+import { linkIgdbAction, mergeNamesAction, unlinkIgdbAction, unmergeNameAction } from "../actions";
+import { igdbEnabled } from "@/lib/igdb";
+import { IgdbLink } from "./igdb-link";
 import { ActionButton, MergeButton, MergeForm } from "../ui";
 
 interface Named {
@@ -40,6 +42,12 @@ export default async function AdminGames() {
     ...likelyDuplicates(franchiseItems).map((p) => ({ kind: "franchise" as const, pair: p })),
   ];
 
+  const igdb = igdbEnabled();
+  const isLinked = (g: (typeof games)[number]) => g.projects.every((p) => p.igdbId && p.igdbId === g.projects[0].igdbId);
+  const linked = games.filter(isLinked).length;
+  // Games still to link first, the ones with most projects at the top.
+  const byLink = [...games].sort((a, b) => Number(isLinked(a)) - Number(isLinked(b)) || b.projects.length - a.projects.length);
+
   return (
     <div className="grid gap-4">
       <section className="panel overflow-hidden">
@@ -75,6 +83,48 @@ export default async function AdminGames() {
           ))}
           {dupes.length === 0 ? <li className="px-5 py-8 text-center text-sm text-ink-3">No likely duplicates.</li> : null}
         </ul>
+      </section>
+
+      <section className="panel overflow-hidden">
+        <h2 className="border-b border-line px-5 py-3.5 text-sm font-semibold">
+          IGDB{" "}
+          <span className="font-normal text-ink-3">
+            · {linked} of {games.length} games linked. Linking gives every project on the page IGDB&apos;s name and id (and its year where
+            none is set); old spellings are merged into it, so their links still work
+          </span>
+        </h2>
+        {igdb ? (
+          <ul className="divide-y divide-line">
+            {byLink.map((g) => {
+              const ids = [...new Set(g.projects.map((p) => p.igdbId).filter((x): x is number => !!x))];
+              const all = ids.length === 1 && g.projects.every((p) => p.igdbId === ids[0]);
+              return (
+                <li key={g.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-2.5 text-sm">
+                  <Link href={`/games/${g.slug}`} className="min-w-0 hover:underline">
+                    {g.title}
+                  </Link>
+                  <span className="text-xs text-ink-3">
+                    {g.projects.length} project{g.projects.length === 1 ? "" : "s"}
+                    {ids.length
+                      ? all
+                        ? ` · IGDB ${ids[0]}`
+                        : ` · ${g.projects.filter((p) => p.igdbId).length} linked (${ids.join(", ")})`
+                      : ""}
+                  </span>
+                  <span className="ml-auto flex items-center gap-1">
+                    {ids.length ? <ActionButton action={unlinkIgdbAction} fields={{ key: g.key }} label="Unlink" /> : null}
+                    {all ? null : <IgdbLink gameKey={g.key} title={g.title} action={linkIgdbAction} />}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="px-5 py-6 text-sm text-ink-3">
+            IGDB lookups are off: set <code className="font-mono text-xs">IGDB_CLIENT_ID</code> and{" "}
+            <code className="font-mono text-xs">IGDB_CLIENT_SECRET</code> (docs/self-hosting.md, IGDB).
+          </p>
+        )}
       </section>
 
       <section className="panel p-5">

@@ -92,3 +92,10 @@ export async function searchIgdb(text: string): Promise<IgdbGame[]> {
   searches.set(q, { at: Date.now(), games });
   return games;
 }
+
+/** One game by its IGDB id, read fresh (for linking, so a page can't hand over a made-up name). */
+export async function igdbGame(id: number): Promise<IgdbGame | null> {
+  if (!igdbEnabled() || !Number.isInteger(id) || id <= 0) return null;
+  const rows = (await query("games", `${FIELDS} where id = ${id}; limit 1;`)) as RawGame[];
+  return rows[0] ? fromRaw(rows[0]) : null;
+}

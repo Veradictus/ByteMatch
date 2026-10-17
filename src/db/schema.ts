@@ -399,6 +399,8 @@ export interface VersionGame {
   game: string;
   franchise?: string | null;
   releaseYear?: number | null;
+  /** As the project's igdbId, for this version's game. */
+  igdbId?: number | null;
 }
 
 export type Project = typeof projects.$inferSelect;

@@ -48,7 +48,13 @@ export async function gameRows(): Promise<GameRow[]> {
     const mine = p.version ? own[p.version] : undefined;
     out.push(
       mine
-        ? { ...base, game: mine.game, franchise: mine.franchise ?? base.franchise, releaseYear: mine.releaseYear ?? null, igdbId: null }
+        ? {
+            ...base,
+            game: mine.game,
+            franchise: mine.franchise ?? base.franchise,
+            releaseYear: mine.releaseYear ?? null,
+            igdbId: mine.igdbId ?? null,
+          }
         : base,
     );
     for (const [version, g] of Object.entries(own)) {
@@ -63,7 +69,7 @@ export async function gameRows(): Promise<GameRow[]> {
         game: g.game,
         franchise: g.franchise ?? base.franchise,
         releaseYear: g.releaseYear ?? null,
-        igdbId: null,
+        igdbId: g.igdbId ?? null,
         codePercent: Number(m.matched_code_percent),
         functions: { done: Number(m.matched_functions), total: Number(m.total_functions) },
         updated: latest.commitTimestamp.toISOString(),

@@ -94,7 +94,7 @@ const text = (form: FormData, key: string) => {
  * The per-version games from the settings form: vg_version_N with its vg_game_N, vg_franchise_N
  * and vg_year_N. A version left without a game is the project's game, so it isn't kept.
  */
-function versionGamesFrom(form: FormData): Record<string, VersionGame> {
+function versionGamesFrom(form: FormData, before: Record<string, VersionGame> = {}): Record<string, VersionGame> {
   const out: Record<string, VersionGame> = {};
   for (const [key, value] of form.entries()) {
     const m = /^vg_version_(\d+)$/.exec(key);
@@ -106,6 +106,8 @@ function versionGamesFrom(form: FormData): Record<string, VersionGame> {
       game,
       franchise: cleanName(text(form, `vg_franchise_${m[1]}`)),
       releaseYear: cleanYear(text(form, `vg_year_${m[1]}`)),
+      // An IGDB link (set by an admin) holds while the name stays the one it was linked under.
+      ...(before[version]?.igdbId && before[version].game === game ? { igdbId: before[version].igdbId } : {}),
     };
   }
   return out;
@@ -133,7 +135,7 @@ export async function updateProject(owner: string, repo: string, _: FormState, f
       game: cleanName(text(form, "game")),
       // Set by the game field when the name was picked from IGDB; meaningless without a name.
       igdbId: cleanName(text(form, "game")) && /^\d{1,9}$/.test(text(form, "igdbId") ?? "") ? Number(text(form, "igdbId")) : null,
-      versionGames: versionGamesFrom(form),
+      versionGames: versionGamesFrom(form, project.versionGames ?? {}),
       franchise: cleanName(text(form, "franchise")),
       releaseYear: cleanYear(text(form, "releaseYear")),
       defaultVersion: text(form, "defaultVersion"),

@@ -12,6 +12,8 @@ import { appointAdmin, assertCanActOnProject, removeAdmin } from "@/lib/roles";
 import { clearSetting, setSetting } from "@/lib/settings";
 import { removeSharersThemes, setThemeRemoved } from "@/db/themes";
 import { addAlias, AliasError, removeAlias } from "@/db/aliases";
+import { igdbGame } from "@/lib/igdb";
+import { linkGame } from "@/lib/igdb-link";
 
 export interface AdminState {
   error?: string;
@@ -158,6 +160,34 @@ export async function unmergeNameAction(form: FormData) {
   const kind = form.get("kind") === "franchise" ? "franchise" : "game";
   const key = String(form.get("key"));
   if (await removeAlias(kind, key)) await audit(actor, `unmerge-${kind}`, key);
+  revalidatePath("/admin/games");
+  revalidatePath("/games", "layout");
+}
+
+/** Links a game page's projects to an IGDB game, read from IGDB by id (never from the form's text). */
+export async function linkIgdbAction(_: AdminState, form: FormData): Promise<AdminState> {
+  const actor = await requireAdmin();
+  const key = String(form.get("key") ?? "");
+  let game;
+  try {
+    game = await igdbGame(Number(form.get("igdbId")));
+  } catch (e) {
+    console.error("igdb", e);
+    return { error: "IGDB didn't answer; try again in a moment." };
+  }
+  if (!game) return { error: "IGDB has no game with that id." };
+  const done = await linkGame(key, game, actor.id);
+  if (!done) return { error: "That game page no longer exists; reload." };
+  await audit(actor, "link-igdb", key, { igdbId: game.id, name: game.name });
+  revalidatePath("/admin/games");
+  revalidatePath("/games", "layout");
+  return { message: `Linked ${done.projects} project${done.projects === 1 ? "" : "s"} to “${game.name}” on IGDB.` };
+}
+
+export async function unlinkIgdbAction(form: FormData) {
+  const actor = await requireAdmin();
+  const key = String(form.get("key") ?? "");
+  if (await linkGame(key, null, actor.id)) await audit(actor, "unlink-igdb", key);
   revalidatePath("/admin/games");
   revalidatePath("/games", "layout");
 }
