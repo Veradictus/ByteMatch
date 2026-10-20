@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { cookieOptions, createSession, SESSION_COOKIE, STATE_COOKIE } from "@/auth/session";
+import { cookieOptions, createSession, destroySession, SESSION_COOKIE, STATE_COOKIE } from "@/auth/session";
 import { userClient } from "@/github/client";
 import { tokenForCode } from "@/auth/github-token";
 import { config, signInConfigured } from "@/lib/config";
@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
   if (await isBlocked({ githubId: Number(profile.id), login: profile.login })) {
     return new Response(null, { status: 302, headers: { location: `${config().PUBLIC_URL}/login?blocked=1` } });
   }
+  // Signing in again (say, after the old token ran out) replaces the session this browser had.
+  await destroySession(request.cookies.get(SESSION_COOKIE)?.value);
   const session = await createSession({ ...profile, id: Number(profile.id) }, token);
   const next = nextEncoded ? Buffer.from(nextEncoded, "base64url").toString() : "/manage";
   const headers = new Headers({ location: `${config().PUBLIC_URL}${next.startsWith("/") && !next.startsWith("//") ? next : "/manage"}` });

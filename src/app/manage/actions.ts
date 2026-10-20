@@ -36,7 +36,7 @@ async function requireSession() {
 async function managed(owner: string, repo: string): Promise<Project> {
   const session = await requireSession();
   const project = await findProject(owner, repo);
-  if (!project || !(await canManage(session, project))) throw new Error("You can't manage this project.");
+  if (!project || !(await canManage(session, project, `/manage/${owner}/${repo}`))) throw new Error("You can't manage this project.");
   return project;
 }
 
@@ -51,7 +51,8 @@ export async function addProject(_: FormState, form: FormData): Promise<FormStat
   if (!session.admin && !(await registrationOpen())) return { error: "Adding projects is closed on this instance right now." };
   const parsed = await parseRepo(String(form.get("repo") ?? ""));
   if (!parsed) return { error: "Enter the repository as owner/repo or its GitHub URL." };
-  if (!(await canManageRepo(session, parsed.owner, parsed.repo))) return { error: "You need admin rights on that GitHub repository." };
+  if (!(await canManageRepo(session, parsed.owner, parsed.repo, "/manage/new")))
+    return { error: "You need admin rights on that GitHub repository." };
 
   let repo;
   try {

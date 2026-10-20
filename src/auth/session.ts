@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "../db/client";
 import { sessions, users, type Project, type User } from "../db/schema";
@@ -128,20 +129,38 @@ export async function destroySession(token: string | undefined) {
       .where(eq(sessions.id, sha256(token)));
 }
 
-/** Can the session's user manage OWNER/REPO? Site admins can; otherwise GitHub must say "admin". */
-export async function canManageRepo(session: Session, owner: string, repo: string): Promise<boolean> {
+/** GitHub turned the session's token away: expired with nothing to renew it (signed in before renewals), or revoked. */
+export const tokenRejected = (e: unknown) => (e as { status?: unknown } | null)?.status === 401;
+
+/**
+ * Sends the user through "Sign in with GitHub" again and back to NEXT. GitHub skips its consent
+ * screen for someone who already approved the App, so this is a couple of redirects, not a form.
+ */
+export function signInAgain(next: string): never {
+  redirect(`/auth/login?next=${encodeURIComponent(next)}`);
+}
+
+/**
+ * Can the session's user manage OWNER/REPO? Site admins can; otherwise GitHub must say "admin".
+ * With NEXT, a token GitHub no longer accepts signs the user in again and returns there, rather
+ * than reading as "no rights".
+ */
+export async function canManageRepo(session: Session, owner: string, repo: string, next?: string): Promise<boolean> {
   if (session.owner) return true;
+  let rejected = false;
   try {
     const { data } = await userClient(session.githubToken).request("GET /repos/{owner}/{repo}", { owner, repo });
     return !!data.permissions?.admin;
-  } catch {
-    return false;
+  } catch (e) {
+    rejected = tokenRejected(e);
   }
+  if (rejected && next) signInAgain(next);
+  return false;
 }
 
 /** Owners manage everything; admins everything except owners' projects; others need GitHub admin rights. */
-export async function canManage(session: Session, project: Pick<Project, "owner" | "repo" | "createdBy">): Promise<boolean> {
+export async function canManage(session: Session, project: Pick<Project, "owner" | "repo" | "createdBy">, next?: string): Promise<boolean> {
   if (session.owner) return true;
   if (session.admin && (await submitterRole(project)) !== "owner") return true;
-  return canManageRepo(session, project.owner, project.repo);
+  return canManageRepo(session, project.owner, project.repo, next);
 }

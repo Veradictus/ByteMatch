@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { currentSession } from "@/auth/session";
+import { currentSession, signInAgain, tokenRejected } from "@/auth/session";
 import { db } from "@/db/client";
 import { projects } from "@/db/schema";
 import { userClient } from "@/github/client";
@@ -15,8 +15,8 @@ import { RepoPicker, type PickableRepo } from "../repo-picker";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Submit a project" };
 
-/** Public repositories the user administers, most recently pushed first. */
-async function adminRepos(token: string): Promise<PickableRepo[] | null> {
+/** Public repositories the user administers, most recently pushed first; "rejected" when GitHub refuses the token. */
+async function adminRepos(token: string): Promise<PickableRepo[] | null | "rejected"> {
   try {
     const repos = await userClient(token).paginate("GET /user/repos", {
       affiliation: "owner,organization_member,collaborator",
@@ -38,8 +38,8 @@ async function adminRepos(token: string): Promise<PickableRepo[] | null> {
         pushedAt: r.pushed_at ?? null,
         registered: registered.get(r.full_name.toLowerCase()) ?? null,
       }));
-  } catch {
-    return null;
+  } catch (e) {
+    return tokenRejected(e) ? "rejected" : null;
   }
 }
 
@@ -47,7 +47,10 @@ export default async function NewProject() {
   const session = await currentSession();
   if (!session) redirect("/login?next=/manage/new");
   const closed = !session.admin && !(await registrationOpen());
-  const repos = closed ? null : await adminRepos(session.githubToken);
+  const listed = closed ? null : await adminRepos(session.githubToken);
+  // Signed in before ByteMatch renewed GitHub tokens, so it has run out: a quick trip through GitHub fixes it.
+  if (listed === "rejected") signInAgain("/manage/new");
+  const repos = listed;
   const slug = config().GITHUB_APP_SLUG;
   const installLink = slug ? (
     <a href={`https://github.com/apps/${slug}/installations/new`} className="text-accent hover:underline">

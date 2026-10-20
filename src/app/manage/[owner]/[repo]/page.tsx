@@ -52,7 +52,7 @@ export default async function ManageProject({ params, searchParams }: Params) {
   const session = await currentSession();
   if (!session) redirect(`/login?next=/manage/${owner}/${repo}`);
   const project = await findProject(owner, repo);
-  if (!project || !(await canManage(session, project))) notFound();
+  if (!project || !(await canManage(session, project, `/manage/${owner}/${repo}`))) notFound();
   const [problem, skipped] = await Promise.all([projectProblem(project), skippedRuns(project.id)]);
   const [versions, tokens, portList, names, { added }] = await Promise.all([
     projectVersions(project.id),
