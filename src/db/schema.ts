@@ -42,6 +42,12 @@ export const sessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     githubToken: text("github_token").notNull(),
+    /**
+     * For GitHub Apps that let user tokens expire (after 8 hours): the encrypted refresh token and
+     * when the access token runs out. Both null when the token doesn't expire.
+     */
+    githubRefreshToken: text("github_refresh_token"),
+    githubTokenExpiresAt: timestamp("github_token_expires_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: created(),
   },

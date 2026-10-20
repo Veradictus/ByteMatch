@@ -84,7 +84,8 @@ export default async function NewProject() {
               )
             ) : (
               <p className="text-sm text-ink-2">
-                GitHub didn&apos;t return your repositories just now. Enter the repository below instead.
+                GitHub didn&apos;t return your repositories just now. Enter the repository below instead, or sign out and in again if it
+                keeps happening.
               </p>
             )}
           </section>

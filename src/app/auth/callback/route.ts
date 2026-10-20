@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { cookieOptions, createSession, SESSION_COOKIE, STATE_COOKIE } from "@/auth/session";
 import { userClient } from "@/github/client";
+import { tokenForCode } from "@/auth/github-token";
 import { config, signInConfigured } from "@/lib/config";
 import { safeEqual } from "@/lib/crypto";
 import { isBlocked } from "@/lib/moderation";
@@ -19,24 +20,18 @@ export async function GET(request: NextRequest) {
   const code = q.get("code");
   if (!code) return new Response("GitHub did not return a code.", { status: 400 });
 
-  const res = await fetch("https://github.com/login/oauth/access_token", {
-    method: "POST",
-    headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify({
-      client_id: config().GITHUB_CLIENT_ID,
-      client_secret: config().GITHUB_CLIENT_SECRET,
-      code,
-      redirect_uri: `${config().PUBLIC_URL}/auth/callback`,
-    }),
-  });
-  const token = (await res.json()) as { access_token?: string; error_description?: string };
-  if (!token.access_token) return new Response(`GitHub sign-in failed: ${token.error_description ?? "no token"}`, { status: 400 });
+  let token;
+  try {
+    token = await tokenForCode(code);
+  } catch (e) {
+    return new Response(`GitHub sign-in failed: ${e instanceof Error ? e.message : "no token"}`, { status: 400 });
+  }
 
-  const { data: profile } = await userClient(token.access_token).request("GET /user");
+  const { data: profile } = await userClient(token.access).request("GET /user");
   if (await isBlocked({ githubId: Number(profile.id), login: profile.login })) {
     return new Response(null, { status: 302, headers: { location: `${config().PUBLIC_URL}/login?blocked=1` } });
   }
-  const session = await createSession({ ...profile, id: Number(profile.id) }, token.access_token);
+  const session = await createSession({ ...profile, id: Number(profile.id) }, token);
   const next = nextEncoded ? Buffer.from(nextEncoded, "base64url").toString() : "/manage";
   const headers = new Headers({ location: `${config().PUBLIC_URL}${next.startsWith("/") && !next.startsWith("//") ? next : "/manage"}` });
   headers.append("set-cookie", cookie(SESSION_COOKIE, session.token, session.maxAge));

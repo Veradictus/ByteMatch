@@ -134,6 +134,13 @@
       "when": 1792231102433,
       "tag": "0018_cover_position",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792532006946,
+      "tag": "0019_session_refresh",
+      "breakpoints": true
     }
   ]
 }
