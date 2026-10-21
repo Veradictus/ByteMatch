@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { grouped, ordered, squarify, type Rect } from "./treemap";
 import { parseUnitFilter } from "./unit-filter";
 import { ChevronRight, Close, Search } from "./ui/icons";
@@ -120,10 +120,8 @@ export function UnitMap({
   version: string;
   commit: string | null;
 }) {
-  const router = useRouter();
   const path = usePathname();
   const search = useSearchParams();
-  const [, start] = useTransition();
   const openUnit = search.get("unit");
   const layout = search.get("layout") === "size" ? "size" : "ordered";
   const unit = useMemo(() => units.find((u) => u.name === openUnit) ?? null, [units, openUnit]);
@@ -135,7 +133,7 @@ export function UnitMap({
     if (next) qs.set("category", next);
     else qs.delete("category");
     const s = qs.toString();
-    start(() => router.replace(`${path}${s ? `?${s}` : ""}`, { scroll: false }));
+    window.history.replaceState(null, "", `${path}${s ? `?${s}` : ""}`);
   };
   const [query, setQuery] = useState("");
   const [focus, setFocus] = useState<Tile | null>(null);
@@ -151,7 +149,7 @@ export function UnitMap({
     if (next === "size") qs.set("layout", "size");
     else qs.delete("layout");
     const s = qs.toString();
-    start(() => router.replace(`${path}${s ? `?${s}` : ""}`, { scroll: false }));
+    window.history.replaceState(null, "", `${path}${s ? `?${s}` : ""}`);
   };
 
   const navigate = useCallback(
@@ -164,9 +162,10 @@ export function UnitMap({
       setSource(null);
       setFocus(null);
       setQuery("");
-      start(() => router.push(`${path}${qs ? `?${qs}` : ""}`, { scroll: false }));
+      // In the browser only: the map has what it needs, so the server isn't asked to redraw the page.
+      window.history.pushState(null, "", `${path}${qs ? `?${qs}` : ""}`);
     },
-    [router, path, search],
+    [path, search],
   );
 
   // Load the open unit's functions once; they don't change for a given commit.
@@ -285,6 +284,39 @@ export function UnitMap({
   const usedCategories = useMemo(() => categories.filter((c) => units.some((u) => u.categories.includes(c.id))), [categories, units]);
   const shownBytes = tiles.reduce((n, t) => n + t.size, 0);
   const info = focus ?? pinned;
+  // Built once per layout, selection or comparison, not on every pointer move: hovering only
+  // changes the readout, and redrawing thousands of tiles for it is what made the map lag.
+  const tileButtons = useMemo(
+    () =>
+      rects.map(({ item: t, x, y, w, h }) => (
+        <button
+          // A changed tile takes a new key per comparison, so its pulse plays again.
+          key={t.change && levelChanges ? `${t.key}~${levelChanges.older}:${levelChanges.newer}` : t.key}
+          type="button"
+          tabIndex={-1}
+          onMouseEnter={() => setFocus(t)}
+          onClick={() => {
+            if (t.unit) return navigate(t.unit.name);
+            // A function: select it and show its code (again to deselect).
+            const off = pinned?.key === t.key;
+            setPinned(off ? null : t);
+            setSource(off || !openUnit ? null : { unit: openUnit, fn: t.label });
+          }}
+          aria-label={`${t.label}: ${t.detail}`}
+          className={`absolute transition-[filter] duration-100 hover:brightness-125 ${t.change ? "tile-change" : ""}`}
+          style={{
+            ...(t.change ? ({ "--change": CHANGE_COLOR[t.change.kind] } as React.CSSProperties) : {}),
+            left: x,
+            top: y,
+            width: w,
+            height: h,
+            ...shade(t.matched, t.fuzzy),
+            boxShadow: pinned?.key === t.key ? "inset 0 0 0 2px var(--text)" : "inset 0 0 0 0.5px var(--seam)",
+          }}
+        />
+      )),
+    [rects, levelChanges, pinned, openUnit, navigate],
+  );
 
   return (
     <div>
@@ -443,33 +475,7 @@ export function UnitMap({
         style={{ height: "clamp(360px, calc(100vh - 360px), 720px)" }}
         onMouseLeave={() => setFocus(null)}
       >
-        {rects.map(({ item: t, x, y, w, h }) => (
-          <button
-            // A changed tile takes a new key per comparison, so its pulse plays again.
-            key={t.change && levelChanges ? `${t.key}~${levelChanges.older}:${levelChanges.newer}` : t.key}
-            type="button"
-            tabIndex={-1}
-            onMouseEnter={() => setFocus(t)}
-            onClick={() => {
-              if (t.unit) return navigate(t.unit.name);
-              // A function: select it and show its code (again to deselect).
-              const off = pinned?.key === t.key;
-              setPinned(off ? null : t);
-              setSource(off || !openUnit ? null : { unit: openUnit, fn: t.label });
-            }}
-            aria-label={`${t.label}: ${t.detail}`}
-            className={`absolute transition-[filter] duration-100 hover:brightness-125 ${t.change ? "tile-change" : ""}`}
-            style={{
-              ...(t.change ? ({ "--change": CHANGE_COLOR[t.change.kind] } as React.CSSProperties) : {}),
-              left: x,
-              top: y,
-              width: w,
-              height: h,
-              ...shade(t.matched, t.fuzzy),
-              boxShadow: pinned?.key === t.key ? "inset 0 0 0 2px var(--text)" : "inset 0 0 0 0.5px var(--seam)",
-            }}
-          />
-        ))}
+        {tileButtons}
         {groups.map((g) => (
           <div
             key={`g:${g.item}`}

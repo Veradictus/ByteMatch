@@ -13,6 +13,7 @@ import { projectPorts } from "@/db/ports";
 import { PortList } from "./port-list";
 import { CategoryList, CategorySort } from "./category-list";
 import { LinkPending } from "./link-pending";
+import { CommitLink } from "./commit-link";
 import { platformName } from "@/lib/platforms";
 import { publicError } from "@/lib/errors";
 import { HIDE_AFTER_DAYS, hiddenFromPublic, unreachable } from "@/lib/visibility";
@@ -314,23 +315,7 @@ function FunctionalLine({ functional: f, matched }: { functional: Functional; ma
   );
 }
 
-/** What the unit map keeps in the URL, carried along when moving between commits. */
-const KEPT_PARAMS = new Set(["unit", "layout", "category"]);
-
-export async function ProjectView({
-  owner,
-  repo,
-  version,
-  commit,
-  view = {},
-}: {
-  owner: string;
-  repo: string;
-  version?: string;
-  commit?: string;
-  /** The page's other query parameters (the open unit, the map's layout and category), kept when moving between commits. */
-  view?: Record<string, string | string[] | undefined>;
-}) {
+export async function ProjectView({ owner, repo, version, commit }: { owner: string; repo: string; version?: string; commit?: string }) {
   let r;
   try {
     r = await resolve(owner, repo, version ? decodeURIComponent(version) : undefined, null, commit);
@@ -362,13 +347,8 @@ export async function ProjectView({
   const at = rows.findIndex((h) => h.commitSha === row.commitSha);
   const older = at > 0 ? rows[at - 1] : undefined;
   const newer = at >= 0 && at < rows.length - 1 ? rows[at + 1] : undefined;
-  const kept = Object.entries(view).filter((e): e is [string, string] => KEPT_PARAMS.has(e[0]) && typeof e[1] === "string");
-  const commitHref = (sha?: string) => {
-    const qs = new URLSearchParams(kept);
-    if (sha && sha !== rows.at(-1)?.commitSha) qs.set("commit", sha.slice(0, 12));
-    const s = qs.toString();
-    return s ? `${pagePath}?${s}` : pagePath;
-  };
+  // The latest commit is the page without ?commit=.
+  const commitArg = (sha?: string) => (sha && sha !== rows.at(-1)?.commitSha ? sha : null);
 
   const points: HistoryPoint[] = rows.map((h) => ({
     t: h.commitTimestamp.getTime(),
@@ -568,11 +548,11 @@ export async function ProjectView({
                 </div>
                 <div className="flex gap-2">
                   {older ? (
-                    <Link href={commitHref(older.commitSha)} className={navBtn} scroll={false}>
+                    <CommitLink base={pagePath} commit={commitArg(older.commitSha)} className={navBtn}>
                       <ChevronRight size={14} className="rotate-180" />
                       Previous
                       <LinkPending />
-                    </Link>
+                    </CommitLink>
                   ) : (
                     <span className={navOff} aria-disabled>
                       <ChevronRight size={14} className="rotate-180" />
@@ -580,11 +560,11 @@ export async function ProjectView({
                     </span>
                   )}
                   {newer ? (
-                    <Link href={commitHref(newer.commitSha)} className={navBtn} scroll={false}>
+                    <CommitLink base={pagePath} commit={commitArg(newer.commitSha)} className={navBtn}>
                       <LinkPending />
                       Next
                       <ChevronRight size={14} />
-                    </Link>
+                    </CommitLink>
                   ) : (
                     <span className={navOff} aria-disabled>
                       Next
@@ -592,10 +572,10 @@ export async function ProjectView({
                     </span>
                   )}
                   {commit ? (
-                    <Link href={commitHref()} className="btn btn-primary h-9 flex-1 px-3 text-sm" scroll={false}>
+                    <CommitLink base={pagePath} commit={null} className="btn btn-primary h-9 flex-1 px-3 text-sm">
                       Latest
                       <LinkPending />
-                    </Link>
+                    </CommitLink>
                   ) : (
                     <span className="btn h-9 flex-1 border border-line bg-surface-2 px-3 text-sm text-ink-2" aria-current="true">
                       Latest
@@ -711,9 +691,9 @@ export async function ProjectView({
                 const here = h.commitSha === row.commitSha;
                 return (
                   <li key={h.commitSha}>
-                    <Link
-                      href={commitHref(h.commitSha)}
-                      scroll={false}
+                    <CommitLink
+                      base={pagePath}
+                      commit={commitArg(h.commitSha)}
                       title={`${h.measures.matched_code_percent.toFixed(2)}% code matched`}
                       className={`flex items-center gap-2 rounded-lg px-1 py-1.5 text-[13px] transition-colors hover:bg-surface-2 ${here ? "bg-surface-2" : ""}`}
                     >
@@ -727,7 +707,7 @@ export async function ProjectView({
                           {Math.abs(dCode).toFixed(2)}
                         </span>
                       ) : null}
-                    </Link>
+                    </CommitLink>
                   </li>
                 );
               })}
