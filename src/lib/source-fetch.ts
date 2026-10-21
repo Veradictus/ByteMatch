@@ -199,6 +199,54 @@ async function searchFiles(p: Repo, name: string): Promise<string[]> {
   return out;
 }
 
+const INCLUDE_DIRS = ["include", "src", "inc", ""];
+const MAX_HEADERS = 40;
+
+/**
+ * Names the source gives a symbol through macros: `#define Hero_Update func_0023BBE8` in a header
+ * the file includes (projects that rename functions without renaming the symbols the build emits,
+ * so the report keeps the old name). Follows `#include "..."` from TEXTS, beside the file or under
+ * the usual include folders, a few levels deep.
+ */
+async function macroAliases(p: Repo, sha: string, texts: [string, string][], names: string[]): Promise<string[]> {
+  const wanted = names.map(escapeName).join("|");
+  if (!wanted) return [];
+  const define = new RegExp(`^\\s*#\\s*define\\s+([A-Za-z_]\\w*)\\s+(?:${wanted})\\s*(?:$|//|/\\*)`, "gm");
+  const found = new Set<string>();
+  const seen = new Set<string>();
+  let queue = texts;
+  for (let depth = 0; depth < 4 && queue.length && seen.size < MAX_HEADERS; depth++) {
+    // Every include of this level at once, each tried beside its file and under the include folders.
+    const wantedIncludes: string[][] = [];
+    for (const [path, text] of queue) {
+      for (const m of text.matchAll(define)) found.add(m[1]);
+      const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+      for (const inc of text.matchAll(/^\s*#\s*include\s+"([^"]+)"/gm)) {
+        const tries = [dir, ...INCLUDE_DIRS]
+          .map((root) => cleanSourcePath(root ? `${root}/${inc[1]}` : inc[1]))
+          .filter((c): c is string => !!c && !seen.has(c));
+        if (!tries.length || seen.size >= MAX_HEADERS) continue;
+        for (const c of tries) seen.add(c);
+        wantedIncludes.push(tries);
+      }
+    }
+    const next = (
+      await Promise.all(
+        wantedIncludes.map(async (tries) => {
+          const texts = await Promise.all(tries.map((c) => fileAt(p, sha, c)));
+          const i = texts.findIndex((t) => t !== null);
+          return i < 0 ? null : ([tries[i], texts[i]!] as [string, string]);
+        }),
+      )
+    ).filter((x): x is [string, string] => x !== null);
+    queue = next;
+  }
+  for (const n of names) found.delete(n);
+  return [...found];
+}
+
+const escapeName = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** What else the report says about a function, to find it by: its demangled name and address. */
 export interface FunctionHints {
   demangled?: string | null;
@@ -342,10 +390,24 @@ export async function loadSource(
     return first && text !== null ? view(p, sha, first, text, null, fn) : null;
   }
 
+  /** The function under a name a header gives it with #define, looked for in FILES. */
+  const viaMacros = async (files: [string, string][]): Promise<SourceView | null> => {
+    if (!fn || !files.length) return null;
+    const aliases = await macroAliases(p, sha, files, names.length ? names : [fn]);
+    if (!aliases.length) return null;
+    for (const [f, t] of files) {
+      const found = findFunction(t, aliases, address);
+      if (found) return view(p, sha, f, t, found, fn);
+    }
+    return null;
+  };
+
   const text = await fileAt(p, sha, path);
   if (text !== null) {
     const found = find(text);
     if (found || !fn) return view(p, sha, path, text, found, fn);
+    const aliased = await viaMacros([[path, text]]);
+    if (aliased) return aliased;
     // Not in the file the report names: maybe it moved, or the unit spans more than that file.
     return (await firstHolding(await searched([path]), path)) ?? view(p, sha, path, text, null, fn);
   }
@@ -366,7 +428,16 @@ export async function loadSource(
   }
   const known = located.get(rememberKey(path));
   const order = known ? [known, ...dir.filter((d) => d !== known)] : candidates(dir, fn);
-  const found = (await firstHolding(order, path)) ?? (await firstHolding(await searched(dir), path));
+  const found = await firstHolding(order, path);
   if (found) return found;
+  // Renamed by a macro: the headers the directory's files include say what to look for. The first
+  // file's includes are the project's usual ones; the rest are read only if needed.
+  const firstFiles = (await Promise.all(order.slice(0, 12).map(async (f) => [f, await fileAt(p, sha, f)] as const))).filter(
+    (x): x is [string, string] => x[1] !== null,
+  );
+  const aliased = await viaMacros(firstFiles);
+  if (aliased) return aliased;
+  const searchedFound = await firstHolding(await searched(dir), path);
+  if (searchedFound) return searchedFound;
   return { path, url: blob(p, sha, path).replace("/blob/", "/tree/"), kind: "not-found", start: 0, end: 0, lines: 0, code: "" };
 }

@@ -212,3 +212,25 @@ describe("guessUnitFiles", () => {
     expect(guessUnitFiles(files, "auto_03_80008D40_text")).toEqual([]);
   });
 });
+
+describe("loadSource and renamed functions", () => {
+  it("follows #define names from the headers a file includes", async () => {
+    const { vi } = await import("vitest");
+    const repo: Record<string, string> = {
+      "src/game/hero.c": '#include "common.h"\n\nvoid Hero_Update(void) {\n    tick();\n}\n',
+      "include/common.h": '#include "names.h"\n',
+      "include/names.h": "#define Hero_Update      func_0023BBE8\n#define Other func_00000001\n",
+    };
+    vi.stubGlobal("fetch", async (url: string) => {
+      const path = decodeURIComponent(String(url).split("/").slice(6).join("/"));
+      return repo[path] !== undefined ? new Response(repo[path]) : new Response("", { status: 404 });
+    });
+    try {
+      const { loadSource } = await import("./source-fetch");
+      const v = await loadSource({ owner: "o", repo: "r", installationId: null }, "abc", "src/game/hero.c", "func_0023BBE8");
+      expect(v).toMatchObject({ kind: "c", path: "src/game/hero.c", start: 3, end: 5 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
