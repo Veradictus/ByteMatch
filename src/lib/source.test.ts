@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanSourcePath, findFunction, highlightLine, maskNonCode } from "./source";
+import { addressInName, cleanSourcePath, findFunction, functionNames, highlightLine, maskNonCode } from "./source";
 
 const file = `#include "common.h"
 
@@ -78,6 +78,83 @@ func_00112400(char *s)
   });
 });
 
+describe("findFunction, other ways projects write functions", () => {
+  const more = `#include "common.h"
+
+void caller(void) {
+    if (later(1)) { return; }
+}
+
+int later(int x) {
+    return x;
+}
+
+int gl_func_0001EE78(dl, a1, a2)
+    int *dl;
+    int a1, a2;
+{
+    return a1;
+}
+
+asm(".text\\n\\t.globl func_80034E60\\nfunc_80034E60:\\n\\t"
+    "addiu $sp, $sp, -0x18\\n\\t"
+    "jr $ra\\n");
+
+namespace game {
+// FUNCTION: GAME 0x10901710
+int GetStaticClassADifficultyInfo() {
+    return 3;
+}
+}
+
+// @retail 0x9cbc0
+void Unnamed_9cbc0(void) {
+}
+`;
+  const ls = more.split("\n");
+  const at = (r: ReturnType<typeof findFunction>) => (r ? ls.slice(r.start - 1, r.end).join("\n") : null);
+
+  it("finds definitions, not calls inside other functions", () => {
+    expect(at(findFunction(more, "later"))).toBe("int later(int x) {\n    return x;\n}");
+  });
+  it("finds old-style C definitions", () => {
+    expect(at(findFunction(more, "gl_func_0001EE78"))).toMatch(/^int gl_func_0001EE78\(dl, a1, a2\)[\s\S]*return a1;\n\}$/);
+  });
+  it("finds functions still written as an asm block", () => {
+    expect(findFunction(more, "func_80034E60")).toEqual({ kind: "asm", start: 18, end: 20 });
+  });
+  it("finds a function by the address in its marker comment, inside a namespace", () => {
+    expect(at(findFunction(more, "?Mangled@@YAHXZ", 0x10901710))).toMatch(
+      /^\/\/ FUNCTION: GAME 0x10901710\nint GetStaticClassADifficultyInfo/,
+    );
+    expect(at(findFunction(more, "function_9cbc0", addressInName("function_9cbc0")))).toBe(
+      "// @retail 0x9cbc0\nvoid Unnamed_9cbc0(void) {\n}",
+    );
+  });
+  it("finds a namespaced definition by its demangled name", () => {
+    expect(
+      findFunction(more, functionNames("?GetStaticClassADifficultyInfo@@YAHXZ", "int __cdecl GetStaticClassADifficultyInfo(void)"))?.kind,
+    ).toBe("c");
+  });
+});
+
+describe("functionNames", () => {
+  it("reads names out of demangled signatures and MSVC manglings", () => {
+    expect(functionNames("?Get@ULock@@SAPAVUClass@@PBD@Z", "public: static class UClass * __cdecl ULock::Get(char const *)")).toEqual([
+      "ULock::Get",
+      "Get",
+    ]);
+    expect(functionNames("??0Class_10e56ab0@@QAE@XZ")).toEqual(["Class_10e56ab0::Class_10e56ab0", "Class_10e56ab0"]);
+    expect(functionNames("??1Foo@@QAE@XZ")).toEqual(["Foo::~Foo", "~Foo"]);
+    expect(functionNames("func_00112380")).toEqual(["func_00112380"]);
+  });
+  it("finds addresses in generated names", () => {
+    expect(addressInName("func_00112380")).toBe(0x112380);
+    expect(addressInName("function_9cbc0")).toBe(0x9cbc0);
+    expect(addressInName("main_game_loop")).toBeNull();
+  });
+});
+
 describe("cleanSourcePath", () => {
   it("allows plain relative paths only", () => {
     expect(cleanSourcePath("src/core/00112380.c")).toBe("src/core/00112380.c");
@@ -113,5 +190,25 @@ describe("candidates", () => {
       "d/misc.c",
       "d/zz_0032C000.c",
     ]);
+  });
+});
+
+describe("guessUnitFiles", () => {
+  it("finds a unit's file from its name when the report gives no source_path", async () => {
+    const { guessUnitFiles } = await import("./source-fetch");
+    const files = [
+      "src/main/audio/akao_sequencer.c",
+      "include/main/audio/akao_sequencer.h",
+      "tools/akao_sequencer.py.c",
+      "src/field/akao_sequencer.c",
+      "asm/main/audio/akao_sequencer.s",
+    ];
+    expect(guessUnitFiles(files, "main/audio/akao_sequencer")).toEqual([
+      "src/main/audio/akao_sequencer.c",
+      "include/main/audio/akao_sequencer.h",
+      "asm/main/audio/akao_sequencer.s",
+      "src/field/akao_sequencer.c",
+    ]);
+    expect(guessUnitFiles(files, "auto_03_80008D40_text")).toEqual([]);
   });
 });

@@ -25,10 +25,21 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ owner: 
     const report = row ? await loadReport(row) : null;
     const unit = report?.units.find((u) => u.name === unitName);
     if (!row || !unit) return fail(404, "Unit not found");
-    const sourcePath = unit.metadata?.source_path;
-    if (!sourcePath) return fail(404, "This project's report doesn't say where this unit's source is (objdiff's source_path).");
-    const view = await loadSource(r.project, row.commitSha, sourcePath, fn);
-    if (!view) return fail(404, `${sourcePath} isn't in the repository at ${row.commitSha.slice(0, 7)}.`);
+    const sourcePath = unit.metadata?.source_path ?? null;
+    // The map names functions by their demangled names; the report knows both, and the address.
+    const f = fn ? unit.functions.find((x) => x.name === fn || x.metadata?.demangled_name === fn) : undefined;
+    const view = await loadSource(r.project, row.commitSha, sourcePath, f?.name ?? fn, {
+      unit: unit.name,
+      demangled: f?.metadata?.demangled_name,
+      address: Number(f?.metadata?.virtual_address) || null,
+    });
+    if (!view)
+      return fail(
+        404,
+        sourcePath
+          ? `${sourcePath} isn't in the repository at ${row.commitSha.slice(0, 7)}.`
+          : "This project's report doesn't say where this unit's source is (objdiff's source_path), and no file in the repository is named after it.",
+      );
     // A commit's files never change.
     return Response.json({ ...view, commit: row.commitSha }, { headers: { "cache-control": "public, max-age=3600, s-maxage=86400" } });
   } catch (e) {

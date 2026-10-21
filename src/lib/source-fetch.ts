@@ -1,13 +1,14 @@
 import type { Project } from "../db/schema";
 import { repoClient } from "../github/client";
-import { cleanSourcePath, findFunction, type FoundFunction } from "./source";
+import { addressInName, cleanSourcePath, findFunction, functionNames, type FoundFunction } from "./source";
 
 /**
  * A project's source, read from GitHub at the commit a report came from. Files at a commit never
  * change, so what's fetched is kept (by size, up to a budget) and asked for once.
  */
 
-const MAX_FILE = 1_000_000;
+// Some projects keep a whole split in one generated file of a megabyte or more.
+const MAX_FILE = 4_000_000;
 const MAX_DIR_FILES = 200;
 const MAX_DIR_BYTES = 8_000_000;
 const SOURCE_EXT = /\.(c|cc|cpp|cxx|c\+\+|h|hh|hpp|hxx|inc|inl|s|asm)$/i;
@@ -39,6 +40,11 @@ class ByteCache {
 
 const files = new ByteCache(64_000_000);
 const listings = new Map<string, string[] | null>();
+const trees = new Map<string, string[] | null>();
+const searches = new Map<string, string[]>();
+const SEARCHES_PER_MINUTE = 8;
+const searchTimes: number[] = [];
+let searchesPausedUntil = 0;
 /** Which file in a directory a function was found in, per repository commit. */
 const located = new Map<string, string>();
 
@@ -103,6 +109,100 @@ async function listDir(p: Repo, sha: string, path: string): Promise<string[] | n
   if (listings.size > 2000) listings.clear();
   listings.set(key, out);
   return out;
+}
+
+/** Every source file in the repository at SHA (one request); null when GitHub won't say. */
+async function treeAt(p: Repo, sha: string): Promise<string[] | null> {
+  const key = repoKey(p, sha);
+  if (trees.has(key)) return trees.get(key)!;
+  let out: string[] | null = null;
+  try {
+    const { octokit } = await repoClient(p);
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
+      owner: p.owner,
+      repo: p.repo,
+      tree_sha: sha,
+      recursive: "1",
+    });
+    out = data.tree.filter((e) => e.type === "blob" && e.path && SOURCE_EXT.test(e.path)).map((e) => e.path!);
+  } catch {
+    out = null;
+  }
+  if (trees.size > 200) trees.clear();
+  trees.set(key, out);
+  return out;
+}
+
+/**
+ * Files that may hold a unit whose report gives no source_path, best first: those whose path,
+ * without its extension, ends with the unit's name ("main/audio/akao" → src/main/audio/akao.c),
+ * the longest such match first; C and C++ before headers and assembly.
+ */
+export function guessUnitFiles(paths: string[], unit: string): string[] {
+  const segs = unit
+    .replace(/\\/g, "/")
+    .replace(/\.[a-z+]+$/i, "")
+    .split("/")
+    .filter(Boolean);
+  if (!segs.length) return [];
+  const rank = (path: string): number => {
+    const parts = path.replace(/\.[^./]+$/, "").split("/");
+    let n = 0;
+    while (n < segs.length && n < parts.length && parts[parts.length - 1 - n].toLowerCase() === segs[segs.length - 1 - n].toLowerCase())
+      n++;
+    return n;
+  };
+  const kind = (path: string) => (/\.(c|cc|cpp|cxx|c\+\+)$/i.test(path) ? 0 : /\.(s|asm)$/i.test(path) ? 2 : 1);
+  return paths
+    .map((path) => ({ path, n: rank(path) }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || kind(a.path) - kind(b.path) || a.path.length - b.path.length)
+    .map((x) => x.path)
+    .slice(0, 8);
+}
+
+/**
+ * Files GitHub's code search says mention NAME. A last resort (it allows few searches a minute and
+ * reads the default branch, not the commit), so answers are kept.
+ */
+async function searchFiles(p: Repo, name: string): Promise<string[]> {
+  if (!/^~?[A-Za-z_][\w:~]{2,}$/.test(name)) return [];
+  const key = `${p.owner}/${p.repo}:${name}`;
+  const hit = searches.get(key);
+  if (hit) return hit;
+  // GitHub allows about ten code searches a minute; past that, skip them rather than wait.
+  const now = Date.now();
+  while (searchTimes.length && searchTimes[0] < now - 60_000) searchTimes.shift();
+  if (searchTimes.length >= SEARCHES_PER_MINUTE || now < searchesPausedUntil) return [];
+  searchTimes.push(now);
+  let out: string[] = [];
+  try {
+    const { octokit } = await repoClient(p);
+    // Raced against a timer too: the client's rate limiter may hold a request back instead of sending it.
+    const { data } = await Promise.race([
+      octokit.request("GET /search/code", {
+        q: `${name.split("::").pop()} repo:${p.owner}/${p.repo}`,
+        per_page: 10,
+        request: { signal: AbortSignal.timeout(6000), retries: 0 },
+      }),
+      new Promise<never>((_, no) => setTimeout(() => no(new Error("code search timed out")), 6500)),
+    ]);
+    out = data.items.map((i) => i.path).filter((path) => SOURCE_EXT.test(path));
+  } catch (e) {
+    const status = (e as { status?: number }).status;
+    if (status === 403 || status === 429) searchesPausedUntil = Date.now() + 60_000;
+    // Not kept: a refusal or a timeout says nothing about the repository.
+    return [];
+  }
+  if (searches.size > 5000) searches.clear();
+  searches.set(key, out);
+  return out;
+}
+
+/** What else the report says about a function, to find it by: its demangled name and address. */
+export interface FunctionHints {
+  demangled?: string | null;
+  address?: number | null;
 }
 
 export interface SourceView {
@@ -184,13 +284,71 @@ export function candidates(paths: string[], fn: string): string[] {
 
 /**
  * A unit's source at SHA: the whole file, or one function in it. SOURCE_PATH is the report's
- * source_path for the unit, which may be a file or a directory.
+ * source_path for the unit, which may be a file or a directory; without one, the unit's own name
+ * is matched against the repository's files. A function not where the report says is looked for
+ * with GitHub's code search before giving up.
  */
-export async function loadSource(p: Repo, sha: string, sourcePath: string, fn: string | null): Promise<SourceView | null> {
+export async function loadSource(
+  p: Repo,
+  sha: string,
+  sourcePath: string | null | undefined,
+  fn: string | null,
+  hints: FunctionHints & { unit?: string } = {},
+): Promise<SourceView | null> {
+  const names = fn ? functionNames(fn, hints.demangled) : [];
+  const address = hints.address ?? (fn ? addressInName(fn) : null);
+  const find = (t: string) => (fn ? findFunction(t, names.length ? names : [fn], address) : null);
+  const rememberKey = (where: string) => `${repoKey(p, sha)}:${where}:${fn}`;
+
+  /** The first of FILES holding the function, read a few at a time within a byte budget. */
+  const firstHolding = async (order: string[], where: string): Promise<SourceView | null> => {
+    let budget = MAX_DIR_BYTES;
+    for (let i = 0; i < order.length && budget > 0; i += 6) {
+      const batch = await Promise.all(order.slice(i, i + 6).map(async (f) => [f, await fileAt(p, sha, f)] as const));
+      for (const [f, t] of batch) {
+        if (t === null) continue;
+        budget -= t.length;
+        const found = find(t);
+        if (found) {
+          if (located.size > 20_000) located.clear();
+          located.set(rememberKey(where), f);
+          return view(p, sha, f, t, found, fn);
+        }
+      }
+    }
+    return null;
+  };
+  /** Files code search finds the function's name in, minus those already read. */
+  const searched = async (except: string[]) => (fn ? (await searchFiles(p, names[0] ?? fn)).filter((f) => !except.includes(f)) : []);
+
   const path = cleanSourcePath(sourcePath);
-  if (!path) return null;
+  if (!path) {
+    // No source_path: the unit's name against the repository's files.
+    const tree = hints.unit ? await treeAt(p, sha) : null;
+    const guesses = tree && hints.unit ? guessUnitFiles(tree, hints.unit) : [];
+    if (!fn) {
+      const first = guesses[0];
+      const text = first ? await fileAt(p, sha, first) : null;
+      return first && text !== null ? view(p, sha, first, text, null, null) : null;
+    }
+    const known = located.get(rememberKey(`unit:${hints.unit}`));
+    const found = await firstHolding(
+      [...(known ? [known] : []), ...guesses.filter((g) => g !== known), ...(await searched(guesses))],
+      `unit:${hints.unit}`,
+    );
+    if (found) return found;
+    const first = guesses[0];
+    const text = first ? await fileAt(p, sha, first) : null;
+    return first && text !== null ? view(p, sha, first, text, null, fn) : null;
+  }
+
   const text = await fileAt(p, sha, path);
-  if (text !== null) return view(p, sha, path, text, fn ? findFunction(text, fn) : null, fn);
+  if (text !== null) {
+    const found = find(text);
+    if (found || !fn) return view(p, sha, path, text, found, fn);
+    // Not in the file the report names: maybe it moved, or the unit spans more than that file.
+    return (await firstHolding(await searched([path]), path)) ?? view(p, sha, path, text, null, fn);
+  }
 
   const dir = await listDir(p, sha, path);
   if (!dir) return null;
@@ -206,22 +364,9 @@ export async function loadSource(p: Repo, sha: string, sourcePath: string, fn: s
       files: dir.map((f) => ({ path: f, url: blob(p, sha, f) })),
     };
   }
-  const known = located.get(`${repoKey(p, sha)}:${path}:${fn}`);
+  const known = located.get(rememberKey(path));
   const order = known ? [known, ...dir.filter((d) => d !== known)] : candidates(dir, fn);
-  let budget = MAX_DIR_BYTES;
-  // A few at a time: the answer is usually in the first files tried.
-  for (let i = 0; i < order.length && budget > 0; i += 6) {
-    const batch = await Promise.all(order.slice(i, i + 6).map(async (f) => [f, await fileAt(p, sha, f)] as const));
-    for (const [f, t] of batch) {
-      if (t === null) continue;
-      budget -= t.length;
-      const found = findFunction(t, fn);
-      if (found) {
-        if (located.size > 20_000) located.clear();
-        located.set(`${repoKey(p, sha)}:${path}:${fn}`, f);
-        return view(p, sha, f, t, found, fn);
-      }
-    }
-  }
+  const found = (await firstHolding(order, path)) ?? (await firstHolding(await searched(dir), path));
+  if (found) return found;
   return { path, url: blob(p, sha, path).replace("/blob/", "/tree/"), kind: "not-found", start: 0, end: 0, lines: 0, code: "" };
 }
