@@ -522,6 +522,11 @@ kbd {
     animation: none !important;
   }
 }
+/* The version strip's bars: the same segments, thinner. */
+.match-track.match-track-sm {
+  height: 0.5rem;
+  border-radius: 999px;
+}
 /* The opened unit's bar on the map: a little taller, with an edge so it reads against its panel. */
 .match-track.unit-progress {
   height: 1.5rem;

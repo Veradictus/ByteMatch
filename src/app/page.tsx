@@ -42,6 +42,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
     gain30: p.gain_30d === null ? null : Number(p.gain_30d),
     createdAt: new Date(p.created_at).toISOString(),
     image: p.icon_url,
+    others: (p.others ?? []).map((o) => ({ ...o, label: p.version_games?.[o.version]?.game || o.version })),
   }));
   const platforms = [
     ...new Map(all.filter((r) => r.platform).map((r) => [r.platform!.toLowerCase(), r.platformName ?? r.platform!])).entries(),

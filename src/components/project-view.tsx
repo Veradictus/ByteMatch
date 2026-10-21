@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Project } from "@/db/schema";
-import { findProject, hasImportedHistory, history, latestFullReport, loadReport } from "@/db/store";
+import { findProject, hasImportedHistory, history, latestFullReport, loadReport, versionSummaries } from "@/db/store";
 import { breadcrumbJsonLd, projectCanonicalPath, projectJsonLd, projectSeoInput } from "@/lib/seo";
 import { JsonLd } from "./json-ld";
 import { config } from "@/lib/config";
@@ -26,7 +26,7 @@ import { formatBytes } from "@/report/measures";
 import { CopyField } from "./copy-field";
 import { ExternalImage } from "./external-image";
 import { ChevronRight, DiscordMark, GitHubMark } from "./ui/icons";
-import { VersionSelect } from "./version-select";
+import { VersionStrip } from "./version-strip";
 import { HistoryChart, type HistoryPoint } from "./history-chart";
 import { UnitMap, type MapUnit } from "./unit-map";
 import { UnitTable, type UnitRow } from "./unit-table";
@@ -332,11 +332,12 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
   const { project, measures: m, row } = r;
   const base = `/${project.owner}/${project.repo}`;
   const pagePath = version ? `${base}/${encodeURIComponent(r.version)}` : base;
-  const [rows, latestFull, imported, portRows] = await Promise.all([
+  const [rows, latestFull, imported, portRows, summaries] = await Promise.all([
     history(project.id, r.version),
     commit ? Promise.resolve(undefined) : latestFullReport(project.id, r.version),
     hasImportedHistory(project.id),
     projectPorts(project.id),
+    r.versions.length > 1 ? versionSummaries(project.id) : Promise.resolve([]),
   ]);
   // A port of another game this repository holds (see versionGames) belongs on that game's pages.
   const shownPorts = portRows.filter((p) => portGame(p, project) === portGame({ version: r.version }, project));
@@ -420,11 +421,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
           {project.name}
         </Link>
         <ChevronRight size={12} className="text-ink-3" />
-        {r.versions.length > 1 ? (
-          <VersionSelect base={base} versions={r.versions} current={r.version} defaultVersion={project.defaultVersion ?? r.versions[0]} />
-        ) : (
-          <span className="font-mono text-xs text-ink-2">{r.version}</span>
-        )}
+        <span className="font-mono text-xs text-ink-2">{r.version}</span>
         {project.discordUrl ? (
           <a href={project.discordUrl} rel="noopener noreferrer" target="_blank" className="btn btn-ghost ml-auto h-9 px-3 text-sm">
             <DiscordMark size={14} />
@@ -436,6 +433,16 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
           Repository
         </a>
       </nav>
+
+      {summaries.length > 1 ? (
+        <VersionStrip
+          base={base}
+          versions={summaries}
+          current={r.version}
+          defaultVersion={project.defaultVersion ?? r.versions[0]}
+          versionGames={project.versionGames ?? {}}
+        />
+      ) : null}
 
       {problem ? (
         <ProblemPanel problem={problem} manageHref={`/manage/${project.owner}/${project.repo}`} />

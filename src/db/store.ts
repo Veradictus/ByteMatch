@@ -154,6 +154,28 @@ export async function projectVersions(projectId: number): Promise<{ version: str
   return rows.map((r) => ({ version: r.version, latest: new Date(r.latest) }));
 }
 
+export interface VersionSummary {
+  version: string;
+  measures: Measures;
+  latest: Date;
+  /** Whether any of its reports still has the full breakdown (units), or only totals. */
+  hasUnits: boolean;
+}
+
+/** Each version's latest measures, most recently updated first, for the project page's version strip. */
+export async function versionSummaries(projectId: number): Promise<VersionSummary[]> {
+  const rows = await db().execute<{ version: string; measures: Measures; commit_timestamp: string; has_units: boolean }>(dsql`
+    select v.version, v.measures, v.commit_timestamp,
+           exists (select 1 from ${reports} b where b.project_id = ${projectId} and b.version = v.version and b.blob_id is not null) as has_units
+    from (
+      select distinct on (version) version, measures, commit_timestamp from ${reports}
+      where project_id = ${projectId}
+      order by version, commit_timestamp desc, id desc
+    ) v
+    order by v.commit_timestamp desc`);
+  return [...rows].map((r) => ({ version: r.version, measures: r.measures, latest: new Date(r.commit_timestamp), hasUnits: r.has_units }));
+}
+
 /** The version a page or badge shows when none is asked for. */
 export async function defaultVersion(project: Project): Promise<string | undefined> {
   if (project.defaultVersion) return project.defaultVersion;
@@ -261,12 +283,15 @@ export async function projectIndex() {
     bumped_at: string | null;
     /** Where "Recently updated" puts it: the later of the two above. */
     listed_at: string | null;
+    /** The project's other versions with their latest code matched, by version id. */
+    others: { version: string; code: number }[] | null;
   }>(dsql`
     select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.igdb_id, p.version_games,
            p.image_url, p.cover_position, p.icon_url, p.created_at,
            r.version, r.measures, r.commit_timestamp,
            (r.measures->>'matched_code_percent')::float8 - (b.measures->>'matched_code_percent')::float8 as gain_30d,
-           since.at as progressed_at, p.bumped_at, greatest(since.at, p.bumped_at) as listed_at
+           since.at as progressed_at, p.bumped_at, greatest(since.at, p.bumped_at) as listed_at,
+           ov.others
     from ${projects} p
     left join lateral (
       select version, measures, commit_timestamp from ${reports} r
@@ -294,6 +319,14 @@ export async function projectIndex() {
       where n.project_id = p.id and n.version = r.version
         and (prior.commit_timestamp is null or n.commit_timestamp > prior.commit_timestamp)
     ) since on true
+    left join lateral (
+      select json_agg(json_build_object('version', o.version, 'code', (o.measures->>'matched_code_percent')::float8) order by o.version) as others
+      from (
+        select distinct on (version) version, measures from ${reports} x
+        where x.project_id = p.id and x.version <> r.version
+        order by version, commit_timestamp desc, id desc
+      ) o
+    ) ov on true
     where p.enabled
       and (p.last_error is null
            or (r.version is not null

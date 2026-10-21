@@ -23,6 +23,36 @@ export interface ProjectRow {
   totalCode?: number | null;
   gain30?: number | null;
   createdAt?: string | null;
+  /** The project's other versions (another region, or another game in the same repository). */
+  others?: OtherVersion[];
+}
+
+export interface OtherVersion {
+  version: string;
+  /** Its game's name when it's a game of its own, else the version id. */
+  label: string;
+  code: number;
+}
+
+/** A project's other versions in one quiet line: each with a sliver of bar and its percentage. */
+export function OtherVersions({ others, max = 3 }: { others: OtherVersion[]; max?: number }) {
+  if (!others.length) return null;
+  const shown = others.slice(0, max);
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-3">
+      <span>Also</span>
+      {shown.map((o) => (
+        <span key={o.version} className="flex min-w-0 items-center gap-1.5" title={`${o.label}: ${o.code.toFixed(2)}% code matched`}>
+          <span className="max-w-40 truncate text-ink-2">{o.label}</span>
+          <span className="relative h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-track" aria-hidden>
+            <span className="absolute inset-y-0 left-0 rounded-full bg-done" style={{ width: `${Math.max(0, Math.min(100, o.code))}%` }} />
+          </span>
+          <span className="font-mono">{o.code.toFixed(1)}%</span>
+        </span>
+      ))}
+      {others.length > max ? <span>+{others.length - max} more</span> : null}
+    </div>
+  );
 }
 
 const fmt = new Intl.NumberFormat("en-US");
@@ -90,6 +120,11 @@ export function ProjectList({ rows, empty }: { rows: ProjectRow[]; empty: React.
               ) : null}
               <div className="text-xs text-ink-3">functions</div>
             </div>
+            {r.others?.length ? (
+              <div className="sm:col-span-3 sm:pl-[3.625rem]">
+                <OtherVersions others={r.others} />
+              </div>
+            ) : null}
           </Link>
         </li>
       ))}

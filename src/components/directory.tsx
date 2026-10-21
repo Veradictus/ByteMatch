@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { platformName } from "@/lib/platforms";
-import type { ProjectRow } from "./project-list";
+import { OtherVersions, type ProjectRow } from "./project-list";
 
 /**
  * The Directory layout's own markup (a theme's style picks it; see docs/theming.md), after the
@@ -147,6 +147,11 @@ export function ProjectCards({ rows, empty }: { rows: ProjectRow[]; empty: React
                 {r.linkedPercent ? <span>{r.linkedPercent.toFixed(2)}% linked</span> : null}
                 {r.updated ? <time dateTime={r.updated}>Updated {date.format(new Date(r.updated))}</time> : null}
               </div>
+              {r.others?.length ? (
+                <div className="mt-3 border-t border-line pt-3">
+                  <OtherVersions others={r.others} max={4} />
+                </div>
+              ) : null}
             </div>
           </article>
         </li>
