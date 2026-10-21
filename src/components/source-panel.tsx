@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { highlight, type TokenKind } from "@/lib/source";
 import { Close } from "./ui/icons";
@@ -153,12 +154,15 @@ export function SourcePanel({
         </div>
       ) : v?.kind === "not-found" ? (
         <p className="px-4 py-6 text-sm text-ink-3">
-          {fn ? `Couldn't find ${fn} in ${v.path} at this commit.` : `Nothing to show in ${v.path}.`} It may be written in a way ByteMatch
-          doesn&apos;t recognise;{" "}
+          {fn ? `Couldn't find ${fn} in ${v.path} at this commit.` : `Nothing to show in ${v.path}.`}{" "}
           <a href={v.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-            open the file on GitHub
+            Open the file on GitHub
           </a>
-          .
+          , or see{" "}
+          <Link href="/docs/source-linking" className="text-accent hover:underline">
+            how ByteMatch finds functions
+          </Link>{" "}
+          for the ways a project can make it findable.
         </p>
       ) : v ? (
         <>
