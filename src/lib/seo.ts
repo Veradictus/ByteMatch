@@ -287,6 +287,12 @@ export const DOCS_SEO: Record<string, { title: string; absoluteTitle?: boolean; 
       "A prompt for Claude Code, Cursor or Copilot that wires a decompilation repository up for ByteMatch: objdiff units, the CI report artifact and a badge, plus how units become the project page.",
     keywords: ["objdiff.json", "objdiff units", "decompilation CI"],
   },
+  "source-linking": {
+    title: "Linking source code to a decompilation's units and functions",
+    description:
+      "How ByteMatch finds a function's code in a decompilation repository: objdiff source_path, renamed functions through #define headers, asm labels and address comments, and a script to check a project.",
+    keywords: ["objdiff source_path", "decompilation source", "objdiff.json units"],
+  },
   "migrating-from-decomp-dev": {
     // Aimed at people searching for "decomp.dev". Accurate: decomp.dev is closed to new projects and being sunset.
     title: "decomp.dev is being sunset: move your project to ByteMatch",

@@ -224,8 +224,9 @@ manage page: the project counts as updated at that moment. One bump per project 
 On the unit map, **View source** on an opened unit shows its file, and selecting a function shows
 just that function, both from your repository at the commit of the report you're looking at, with
 a link to the lines on GitHub. ByteMatch finds the file through each unit's `source_path` in the
-report, which dtk-template and most objdiff setups fill in; a unit without one has no source to
-show.
+report, which dtk-template and most objdiff setups fill in; without one, it looks for a file named
+after the unit. [Linking source code](source-linking.md) covers how functions are found (renamed
+functions included), how to set a repository up so all of them are, and a script that checks it.
 
 ## Manage page reference
 

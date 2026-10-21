@@ -345,8 +345,8 @@ GET /api/v1/projects/{owner}/{repo}/source?unit=<unit>[&function=<name>][&versio
 What the project page shows when you open a unit's source or select a function: the code from the
 project's repository at the commit its report came from. The report says which file a unit is
 (objdiff's `source_path`); ByteMatch fetches it from GitHub, and for a function finds its
-definition (with the comment above it), follows `__asm__("name")` labels to the C name it was
-written under, or points at the line that still includes it as assembly (`INCLUDE_ASM`,
+definition (with the comment above it), follows `__asm__("name")` labels and `#define` renames to
+the C name it was written under, or points at the line that still includes it as assembly (`INCLUDE_ASM`,
 `GLOBAL_ASM`, `LINKER_REMNANT` and the like). When `source_path` is a directory, its files are
 searched. Files at a commit never change, so they are fetched once.
 
@@ -365,8 +365,9 @@ searched. Files at a commit never change, so they are fetched once.
 
 `kind` is `c`, `asm` (the lines around its include), `file` (the whole file, up to 4,000 lines;
 `lines` says how many there are), `directory` (with `files` linking each source file), or
-`not-found` (with the file's `url`). A unit whose report has no `source_path` is a 404 that says
-so.
+`not-found` (with the file's `url`). Without a `source_path`, ByteMatch looks for a file named after
+the unit, and the answer is a 404 when there is none. The full lookup (folders, `#define` renames,
+address comments, code search) is in [Linking source code](source-linking.md).
 
 ## History upload
 

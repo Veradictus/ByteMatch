@@ -16,6 +16,12 @@ export const DOCS = [
     summary: "A prompt for a coding assistant to wire a repository up, and how units are read.",
   },
   {
+    slug: "source-linking",
+    file: "docs/source-linking.md",
+    group: "Projects",
+    summary: "Make every function's code show on the project page: source paths, renamed functions, checking.",
+  },
+  {
     slug: "migrating-from-decomp-dev",
     file: "docs/migrating-from-decomp-dev.md",
     group: "Projects",

@@ -51,8 +51,14 @@ Game versions (e.g. SCES_509.16, GALE01): <versions>
 5. README: add a progress badge,
    [![Progress](https://bytematch.dev/<owner>/<repo>.svg)](https://bytematch.dev/<owner>/<repo>)
 
-6. Check what you can: run the build and objdiff-cli report generate locally if the tools
-   are available, and validate the workflow's YAML. List anything you couldn't run.
+6. Source on the project page: for functions whose C names differ from the report's symbol
+   names, follow https://bytematch.dev/docs/source-linking (rename headers reachable by
+   quoted #include, asm labels, or an address comment above each function).
+
+7. Check what you can: run the build and objdiff-cli report generate locally if the tools
+   are available, and validate the workflow's YAML. List anything you couldn't run. Once a
+   CI run has been read, run scripts/check-source-links.py from ByteMatch's repository on
+   the project and report what it finds.
 ```
 
 ## How ByteMatch reads your units
@@ -75,6 +81,8 @@ A few things that follow from this:
 - **Names are the layout.** `game/player/move` and `game/player/jump` sit together in a
   `player` box inside `game`. Flat names (`move`, `jump`) give one flat map, which is hard to read
   for a big project.
+- **Source needs names it can find.** [Linking source code](source-linking.md) has the whole
+  lookup, the fixes for functions renamed in source, and a script to check a project.
 - **A unit can be a folder.** If `source_path` is a directory (projects that split one object into
   many files), **View source** lists its files and a function opens the file it's defined in.
   Files named after the address their code starts at (`vendor_002CF2C0.c`) are searched first.
