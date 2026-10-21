@@ -141,6 +141,13 @@
       "when": 1792532006946,
       "tag": "0019_session_refresh",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792598210361,
+      "tag": "0020_version_labels",
+      "breakpoints": true
     }
   ]
 }

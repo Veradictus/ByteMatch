@@ -7,6 +7,7 @@ import { Plus } from "@/components/ui/icons";
 import { projectIndex } from "@/db/store";
 import { config } from "@/lib/config";
 import { platformName } from "@/lib/platforms";
+import { orderVersions, versionLabel } from "@/lib/versions";
 import { filterAndSort, paginate, parseListParams } from "@/lib/project-query";
 import { homeMetadata } from "@/lib/seo";
 import { chosenTheme } from "@/lib/theme-server";
@@ -31,7 +32,15 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
     platformName: platformName(p.platform),
     game: p.game,
     franchise: p.franchise,
-    version: p.version,
+    // Under the name its maintainers gave it, if any.
+    version: p.version
+      ? versionLabel(p.version, {
+          game: p.game,
+          defaultVersion: p.default_version ?? p.version,
+          versionGames: p.version_games,
+          versionLabels: p.version_labels,
+        })
+      : null,
     codePercent: p.measures ? Number(p.measures.matched_code_percent) : null,
     linkedPercent: p.measures ? Number(p.measures.complete_code_percent) : null,
     fuzzyPercent: p.measures ? Number(p.measures.fuzzy_match_percent) : null,
@@ -42,7 +51,17 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
     gain30: p.gain_30d === null ? null : Number(p.gain_30d),
     createdAt: new Date(p.created_at).toISOString(),
     image: p.icon_url,
-    others: (p.others ?? []).map((o) => ({ ...o, label: p.version_games?.[o.version]?.game || o.version })),
+    others: (() => {
+      const naming = {
+        game: p.game,
+        defaultVersion: p.default_version ?? p.version,
+        versionGames: p.version_games,
+        versionLabels: p.version_labels,
+        versionOrder: p.version_order,
+      };
+      const byVersion = new Map((p.others ?? []).map((o) => [o.version, o]));
+      return orderVersions([...byVersion.keys()], naming).map((v) => ({ ...byVersion.get(v)!, label: versionLabel(v, naming) }));
+    })(),
   }));
   const platforms = [
     ...new Map(all.filter((r) => r.platform).map((r) => [r.platform!.toLowerCase(), r.platformName ?? r.platform!])).entries(),

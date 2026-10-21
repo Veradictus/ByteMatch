@@ -112,6 +112,10 @@ export const projects = pgTable(
      * project's game.
      */
     versionGames: jsonb("version_games").$type<Record<string, VersionGame>>().notNull().default({}),
+    /** Names the maintainers gave versions ("Europe", "USA rev 1"), by version id. */
+    versionLabels: jsonb("version_labels").$type<Record<string, string>>().notNull().default({}),
+    /** The order the maintainers put versions in; the first is the primary (defaultVersion). */
+    versionOrder: jsonb("version_order").$type<string[]>().notNull().default([]),
     /**
      * When a maintainer last moved the project up "Recently updated" by hand, for work a report
      * doesn't show as progress (src/lib/bump.ts).

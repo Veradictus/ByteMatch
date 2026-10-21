@@ -1,19 +1,33 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { canManage, currentSession } from "@/auth/session";
-import { findProject, latestReport, projectVersions } from "@/db/store";
+import { findProject, latestReport, projectVersions, versionSummaries } from "@/db/store";
 import { isSummary } from "@/report/functional";
 import { loadGames } from "@/lib/game-data";
 import { resolveKey } from "@/lib/games";
 import type { NameOption } from "../../name-field";
 import { GameFields } from "../../game-fields";
+import { VersionOrder, type OrderedVersion } from "../../version-order";
+import { DeleteProject } from "../../delete-project";
+import { orderVersions, versionLabel } from "@/lib/versions";
 import { igdbEnabled } from "@/lib/igdb";
 import { config } from "@/lib/config";
 import { projectProblem, skippedRuns } from "@/lib/project-problems";
 import { ProblemPanel } from "@/components/problem-panel";
 import { PLATFORMS } from "@/lib/platforms";
 import { listTokens } from "@/lib/tokens";
-import { addPort, deleteToken, newToken, removePort, runAction, setImageUrl, updateProject, uploadHistory } from "../../actions";
+import {
+  addPort,
+  deleteOwnProject,
+  deleteToken,
+  newToken,
+  removePort,
+  runAction,
+  setVersions,
+  setImageUrl,
+  updateProject,
+  uploadHistory,
+} from "../../actions";
 import { ImageForm } from "../../image-form";
 import { Select } from "@/components/ui/select";
 import { ChevronRight } from "@/components/ui/icons";
@@ -54,13 +68,24 @@ export default async function ManageProject({ params, searchParams }: Params) {
   const project = await findProject(owner, repo);
   if (!project || !(await canManage(session, project, `/manage/${owner}/${repo}`))) notFound();
   const [problem, skipped] = await Promise.all([projectProblem(project), skippedRuns(project.id)]);
-  const [versions, tokens, portList, names, { added }] = await Promise.all([
+  const [versions, tokens, portList, names, { added }, summaries] = await Promise.all([
     projectVersions(project.id),
     listTokens(project.id),
     projectPorts(project.id),
     loadGames(),
     searchParams,
+    versionSummaries(project.id),
   ]);
+  const naming = { ...project, defaultVersion: project.defaultVersion ?? versions[0]?.version ?? null };
+  const orderedVersions: OrderedVersion[] = orderVersions(
+    summaries.map((v) => v.version),
+    naming,
+  ).map((v) => ({
+    version: v,
+    label: project.versionLabels?.[v] ?? "",
+    fallback: versionLabel(v, { ...naming, versionLabels: {} }),
+    percent: summaries.find((x) => x.version === v)!.measures.matched_code_percent,
+  }));
   const shownVersion = project.defaultVersion ?? versions[0]?.version;
   const latest = shownVersion ? await latestReport(project.id, shownVersion) : undefined;
   const functional = latest?.functional ?? null;
@@ -173,6 +198,18 @@ export default async function ManageProject({ params, searchParams }: Params) {
         ) : null}
       </Card>
 
+      {orderedVersions.length > 1 ? (
+        <Card title="Versions">
+          <p className="mb-4 text-sm text-ink-2">
+            The order the project&apos;s page and the project list show its versions in, and what to call them. The first is the primary:
+            the version the project&apos;s page opens on. Leave a name empty to show the version&apos;s game, or its id.
+          </p>
+          <ActionForm action={setVersions.bind(null, project.owner, project.repo)} submit="Save versions" className="grid gap-4">
+            <VersionOrder versions={orderedVersions} inputClass={inputClass} />
+          </ActionForm>
+        </Card>
+      ) : null}
+
       <Card title="Recently updated">
         <p className="mb-3 text-sm text-ink-2">
           The project list puts projects whose matched code, functions or data last changed first, so commits that change no numbers (a
@@ -268,13 +305,6 @@ export default async function ManageProject({ params, searchParams }: Params) {
                   { value: "", label: "—" },
                   ...Object.entries(PLATFORMS).map(([id, name]) => ({ value: id, label: `${name} (${id})` })),
                 ]}
-              />
-            </Field>
-            <Field label="Default version">
-              <Select
-                name="defaultVersion"
-                defaultValue={project.defaultVersion ?? ""}
-                options={[{ value: "", label: "Most recently updated" }, ...versions.map((v) => ({ value: v.version, label: v.version }))]}
               />
             </Field>
             <Field label="Default branch" hint="runs on this branch are tracked">
@@ -518,6 +548,15 @@ export default async function ManageProject({ params, searchParams }: Params) {
           </Field>
         </ActionForm>
       </Card>
+
+      <section className="panel mt-5 border-bad/40 p-6">
+        <h2 className="mb-2 font-semibold text-bad">Delete project</h2>
+        <p className="mb-4 text-sm text-ink-2">
+          Removes the project from {config().SITE_NAME} with its history, reports, ports and upload tokens. Your repository isn&apos;t
+          touched, and you can add the project again later, though history from runs whose artifacts have expired won&apos;t come back.
+        </p>
+        <DeleteProject slug={`${project.owner}/${project.repo}`} action={deleteOwnProject.bind(null, project.owner, project.repo)} />
+      </section>
     </div>
   );
 }

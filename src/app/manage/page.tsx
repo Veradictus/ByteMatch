@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { explain, problemCode } from "@/lib/problems";
 import Link from "next/link";
+import { config } from "@/lib/config";
 import { redirect } from "next/navigation";
 import { currentSession } from "@/auth/session";
 import { db } from "@/db/client";
@@ -9,7 +10,8 @@ import { projects } from "@/db/schema";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Manage" };
 
-export default async function Manage() {
+export default async function Manage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  const { deleted } = await searchParams;
   const session = await currentSession();
   if (!session) redirect("/login?next=/manage");
   const list = await db().select().from(projects).where(eq(projects.createdBy, session.user.id)).orderBy(desc(projects.updatedAt));
@@ -24,6 +26,11 @@ export default async function Manage() {
       <p className="mt-1 text-sm text-ink-2">
         Projects you submitted. To manage another, submit it: you need admin rights on its repository.
       </p>
+      {deleted ? (
+        <p className="mt-4 rounded-md border border-line bg-surface-2 px-3 py-2 text-sm text-ink-2" role="status">
+          Deleted <span className="font-mono">{deleted}</span> from {config().SITE_NAME}.
+        </p>
+      ) : null}
       <ul className="panel mt-6 divide-y divide-line overflow-hidden">
         {list.map((p) => (
           <li key={p.id}>

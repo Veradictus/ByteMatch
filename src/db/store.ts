@@ -269,6 +269,9 @@ export async function projectIndex() {
     release_year: number | null;
     igdb_id: number | null;
     version_games: Record<string, VersionGame>;
+    version_labels: Record<string, string>;
+    version_order: string[];
+    default_version: string | null;
     version: string | null;
     measures: Measures | null;
     commit_timestamp: string | null;
@@ -286,7 +289,7 @@ export async function projectIndex() {
     /** The project's other versions with their latest code matched, by version id. */
     others: { version: string; code: number }[] | null;
   }>(dsql`
-    select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.igdb_id, p.version_games,
+    select p.id, p.owner, p.repo, p.name, p.short_name, p.platform, p.game, p.franchise, p.release_year, p.igdb_id, p.version_games, p.version_labels, p.version_order, p.default_version,
            p.image_url, p.cover_position, p.icon_url, p.created_at,
            r.version, r.measures, r.commit_timestamp,
            (r.measures->>'matched_code_percent')::float8 - (b.measures->>'matched_code_percent')::float8 as gain_30d,

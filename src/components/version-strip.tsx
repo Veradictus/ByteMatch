@@ -1,6 +1,6 @@
 import Link from "next/link";
-import type { VersionGame } from "@/db/schema";
 import type { VersionSummary } from "@/db/store";
+import { orderVersions, versionLabel, type VersionNaming } from "@/lib/versions";
 import { MatchProgress } from "./directory";
 import { LocalTime } from "./local-time";
 import { LinkPending } from "./link-pending";
@@ -17,20 +17,24 @@ export function VersionStrip({
   versions,
   current,
   defaultVersion,
-  versionGames,
+  naming,
 }: {
   base: string;
   versions: VersionSummary[];
   current: string;
   defaultVersion: string;
-  versionGames: Record<string, VersionGame>;
+  /** The project's names and order for its versions. */
+  naming: VersionNaming;
 }) {
+  const byVersion = new Map(versions.map((v) => [v.version, v]));
+  const ordered = orderVersions([...byVersion.keys()], { ...naming, defaultVersion }).map((v) => byVersion.get(v)!);
   return (
     <nav aria-label="Versions" className="-mx-1 overflow-x-auto px-1 pb-1">
       <ul className="grid auto-cols-[minmax(13.5rem,1fr)] grid-flow-col gap-3">
-        {versions.map((v) => {
+        {ordered.map((v) => {
           const here = v.version === current;
-          const game = versionGames[v.version]?.game;
+          const name = versionLabel(v.version, { ...naming, defaultVersion });
+          const game = name !== v.version ? name : undefined;
           const m = v.measures;
           return (
             <li key={v.version} className="min-w-0">

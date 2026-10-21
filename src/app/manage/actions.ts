@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { canManage, canManageRepo, currentSession } from "@/auth/session";
 import { db } from "@/db/client";
-import { projects, type Project, type VersionGame } from "@/db/schema";
+import { auditLog, projects, type Project, type VersionGame } from "@/db/schema";
 import { findProject, latestArtifactRun, projectVersions } from "@/db/store";
 import { userClient } from "@/github/client";
 import { enqueue, JOBS } from "@/lib/queue";
@@ -16,6 +16,7 @@ import { registrationOpen } from "@/lib/settings";
 import { checkDiscordUrl } from "@/lib/links";
 import { nextBump } from "@/lib/bump";
 import { checkPort } from "@/lib/ports";
+import { MAX_LABEL } from "@/lib/versions";
 import { addPort as insertPort, PortLimitError, removePort as deletePort } from "@/db/ports";
 import { createToken, revokeToken } from "@/lib/tokens";
 import { checkVersion, HistoryError, MAX_HISTORY_BYTES, parseHistory, storeHistory } from "@/ingest/history";
@@ -139,7 +140,6 @@ export async function updateProject(owner: string, repo: string, _: FormState, f
       versionGames: versionGamesFrom(form, project.versionGames ?? {}),
       franchise: cleanName(text(form, "franchise")),
       releaseYear: cleanYear(text(form, "releaseYear")),
-      defaultVersion: text(form, "defaultVersion"),
       defaultCategory: text(form, "defaultCategory"),
       defaultBranch: text(form, "defaultBranch") ?? project.defaultBranch,
       artifactPattern: pattern,
@@ -215,6 +215,59 @@ export async function deleteToken(owner: string, repo: string, form: FormData) {
   const project = await managed(owner, repo);
   await revokeToken(project.id, Number(form.get("id")));
   revalidatePath(`/manage/${owner}/${repo}`);
+}
+
+/** The order and names of the project's versions; the first becomes its primary (default) version. */
+export async function setVersions(owner: string, repo: string, _: FormState, form: FormData): Promise<FormState> {
+  const project = await managed(owner, repo);
+  const known = (await projectVersions(project.id)).map((v) => v.version);
+  const sent = form.getAll("order").map(String);
+  const order = [...new Set([...sent.filter((v) => known.includes(v)), ...known])];
+  const labels: Record<string, string> = {};
+  for (const v of order) {
+    const label = String(form.get(`label:${v}`) ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, MAX_LABEL);
+    if (label) labels[v] = label;
+  }
+  await db()
+    .update(projects)
+    .set({ versionOrder: order, versionLabels: labels, defaultVersion: order[0] ?? null, updatedAt: new Date() })
+    .where(eq(projects.id, project.id));
+  revalidatePath(`/manage/${owner}/${repo}`);
+  revalidatePath(`/${owner}/${repo}`, "layout");
+  revalidatePath("/");
+  return { message: `Saved. ${labels[order[0]] ?? order[0]} is the primary version.` };
+}
+
+/**
+ * Deletes the project and everything ByteMatch holds for it (reports, history, tokens, ports).
+ * The repository is untouched. The form must repeat owner/repo, so it can't happen by a stray click.
+ */
+export async function deleteOwnProject(owner: string, repo: string, _: FormState, form: FormData): Promise<FormState> {
+  const session = await requireSession();
+  const project = await managed(owner, repo);
+  const slug = `${project.owner}/${project.repo}`;
+  if (
+    String(form.get("confirm") ?? "")
+      .trim()
+      .toLowerCase() !== slug.toLowerCase()
+  )
+    return { error: `Type ${slug} to confirm.` };
+  await db().delete(projects).where(eq(projects.id, project.id));
+  await db()
+    .insert(auditLog)
+    .values({
+      actorId: session.user.id,
+      actorLogin: session.user.login,
+      action: "delete-own-project",
+      target: slug,
+      detail: { name: project.name },
+    });
+  revalidatePath("/");
+  revalidatePath("/games", "layout");
+  redirect(`/manage?deleted=${encodeURIComponent(slug)}`);
 }
 
 /** Lists a port built from the project (src/lib/ports.ts). */

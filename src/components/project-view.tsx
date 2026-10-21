@@ -27,6 +27,7 @@ import { CopyField } from "./copy-field";
 import { ExternalImage } from "./external-image";
 import { ChevronRight, DiscordMark, GitHubMark } from "./ui/icons";
 import { VersionStrip } from "./version-strip";
+import { versionLabel } from "@/lib/versions";
 import { HistoryChart, type HistoryPoint } from "./history-chart";
 import { UnitMap, type MapUnit } from "./unit-map";
 import { UnitTable, type UnitRow } from "./unit-table";
@@ -385,6 +386,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
   const versionPath = version ? `/${encodeURIComponent(r.version)}` : "";
   // A version can be a different game from the rest of the project (one repository, two games).
   const gameName = project.versionGames?.[r.version]?.game || project.game;
+  const shownLabel = versionLabel(r.version, { ...project, defaultVersion: project.defaultVersion ?? r.versions[0] });
   const gameSlug = gameName ? slugify(gameName) : "";
   const navBtn = "btn btn-ghost h-9 flex-1 px-3 text-sm";
   const navOff = "btn h-9 flex-1 cursor-not-allowed border border-line px-3 text-sm text-ink-3 opacity-50";
@@ -421,7 +423,15 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
           {project.name}
         </Link>
         <ChevronRight size={12} className="text-ink-3" />
-        <span className="font-mono text-xs text-ink-2">{r.version}</span>
+        <span className="text-xs text-ink-2">
+          {shownLabel === r.version ? (
+            <span className="font-mono">{r.version}</span>
+          ) : (
+            <>
+              {shownLabel} <span className="font-mono text-ink-3">{r.version}</span>
+            </>
+          )}
+        </span>
         {project.discordUrl ? (
           <a href={project.discordUrl} rel="noopener noreferrer" target="_blank" className="btn btn-ghost ml-auto h-9 px-3 text-sm">
             <DiscordMark size={14} />
@@ -440,7 +450,7 @@ export async function ProjectView({ owner, repo, version, commit }: { owner: str
           versions={summaries}
           current={r.version}
           defaultVersion={project.defaultVersion ?? r.versions[0]}
-          versionGames={project.versionGames ?? {}}
+          naming={project}
         />
       ) : null}
 
