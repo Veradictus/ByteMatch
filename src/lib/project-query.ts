@@ -1,4 +1,4 @@
-import { platformName } from "./platforms";
+import { platformName, samePlatform } from "./platforms";
 /**
  * Searching, filtering, sorting and paging the project list. Pure, so the index page and the
  * projects API share one behaviour and it can be tested without a database.
@@ -76,7 +76,7 @@ export function matches(row: Listable, q: string): boolean {
 }
 
 export function filterAndSort<T extends Listable>(rows: T[], p: Pick<ListParams, "q" | "platform" | "sort">): T[] {
-  const list = rows.filter((r) => (!p.platform || (r.platform ?? "").toLowerCase() === p.platform) && (!p.q || matches(r, p.q)));
+  const list = rows.filter((r) => (!p.platform || samePlatform(r.platform, p.platform)) && (!p.q || matches(r, p.q)));
   const byName = (a: T, b: T) => a.name.localeCompare(b.name);
   // Projects without a value for the chosen measure go last; ties fall back to most recently updated.
   const num = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? -Infinity : v);

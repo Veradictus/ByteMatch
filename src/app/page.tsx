@@ -6,7 +6,7 @@ import { ProjectList, type ProjectRow } from "@/components/project-list";
 import { Plus } from "@/components/ui/icons";
 import { projectIndex } from "@/db/store";
 import { config } from "@/lib/config";
-import { platformName } from "@/lib/platforms";
+import { platformName, platformOptions } from "@/lib/platforms";
 import { orderVersions, versionLabel } from "@/lib/versions";
 import { filterAndSort, paginate, parseListParams } from "@/lib/project-query";
 import { homeMetadata } from "@/lib/seo";
@@ -63,9 +63,8 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
       return orderVersions([...byVersion.keys()], naming).map((v) => ({ ...byVersion.get(v)!, label: versionLabel(v, naming) }));
     })(),
   }));
-  const platforms = [
-    ...new Map(all.filter((r) => r.platform).map((r) => [r.platform!.toLowerCase(), r.platformName ?? r.platform!])).entries(),
-  ].sort((a, b) => a[1].localeCompare(b[1]));
+  // Every known platform, so one nobody has picked yet is still there to choose (with its count).
+  const platforms = platformOptions(all.map((r) => r.platform)).map((o): [string, string] => [o.id, `${o.name} (${o.count})`]);
   const page = paginate(filterAndSort(all, params), params.page, PER_PAGE);
   const shownParams = { ...params, page: page.page };
   const filtered = Boolean(params.q || params.platform);
