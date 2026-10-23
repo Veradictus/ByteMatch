@@ -297,7 +297,7 @@ export default async function ManageProject({ params, searchParams }: Params) {
             <Field label="Short name" hint="optional">
               <input name="shortName" defaultValue={project.shortName ?? ""} className={inputClass} />
             </Field>
-            <Field label="Platform">
+            <Field label="Platform" hint="lists the project under its platform in the filter">
               <Select
                 name="platform"
                 defaultValue={project.platform ?? ""}

@@ -1,3 +1,4 @@
+import { platformName } from "./platforms";
 /**
  * Searching, filtering, sorting and paging the project list. Pure, so the index page and the
  * projects API share one behaviour and it can be tested without a database.
@@ -60,9 +61,12 @@ export function parseListParams(source: ParamSource): ListParams {
   };
 }
 
-/** Every search word must appear in the name, owner/repo, game or franchise, in any order and case. */
+/** Every search word must appear in the name, owner/repo, game, franchise or platform, in any order and case. */
 export function matches(row: Listable, q: string): boolean {
-  const hay = `${row.name} ${row.owner}/${row.repo} ${row.game ?? ""} ${row.franchise ?? ""}`.toLowerCase().replace(/&/g, "and");
+  const platform = row.platform ? `${row.platform} ${platformName(row.platform) ?? ""}` : "";
+  const hay = `${row.name} ${row.owner}/${row.repo} ${row.game ?? ""} ${row.franchise ?? ""} ${platform}`
+    .toLowerCase()
+    .replace(/&/g, "and");
   return q
     .toLowerCase()
     .replace(/&/g, "and")

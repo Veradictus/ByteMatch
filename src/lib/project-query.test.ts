@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterAndSort, listQuery, paginate, pageWindow, parseListParams } from "./project-query";
+import { filterAndSort, listQuery, matches, paginate, pageWindow, parseListParams } from "./project-query";
 
 const rows = [
   { owner: "OpenRAC", repo: "rac1-decomp", name: "Ratchet & Clank (PAL)", platform: "ps2", codePercent: 86, updated: "2026-10-14" },
@@ -57,5 +57,11 @@ describe("project list queries", () => {
     expect(pageWindow(6, 20)).toEqual([1, null, 4, 5, 6, 7, 8, null, 20]);
     expect(pageWindow(2, 5)).toEqual([1, 2, 3, 4, 5]);
     expect(pageWindow(1, 1)).toEqual([1]);
+  });
+  it("matches platform names in search", () => {
+    const row = { owner: "o", repo: "SM3Dcomp", name: "Super Mario 3D World", platform: "wiiu", codePercent: 1, updated: null };
+    expect(matches(row, "wii u")).toBe(true);
+    expect(matches(row, "wiiu mario")).toBe(true);
+    expect(matches({ ...row, platform: "gc" }, "wii u")).toBe(false);
   });
 });
