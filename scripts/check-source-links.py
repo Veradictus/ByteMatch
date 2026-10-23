@@ -9,8 +9,9 @@ CI run with the change has been read (docs/source-linking.md).
     python3 scripts/check-source-links.py OpenRAC/rac1-decomp --version SCES_509.16 --per-unit 5
     python3 scripts/check-source-links.py owner/repo --unit main/player --per-unit 0   # every function of one unit
 
-Exit status: 0 when every sampled function was found (as C or as an assembly include), 1 when
-some weren't, 2 when the project or its report couldn't be read.
+Exit status: 0 when every sampled function was found (as C or as assembly) or is absent from the
+repository altogether (code generated at build time, not committed), 1 when some that should be
+findable weren't, 2 when the project or its report couldn't be read.
 """
 
 import argparse
@@ -23,6 +24,8 @@ import urllib.request
 from collections import Counter
 
 FOUND = {"c", "asm"}
+# Nothing in the repository has it: not a linking problem, there's no code to link to.
+ABSENT = {"absent"}
 
 
 def main() -> int:
@@ -86,7 +89,7 @@ def main() -> int:
             r = get(f"/api/v1/projects/{owner}/{repo}/source", unit=unit.get("name"), function=name, version=a.version)
             kind = r.get("kind") or "error"
             counts[kind] += 1
-            if kind not in FOUND:
+            if kind not in FOUND and kind not in ABSENT:
                 problems.append(
                     {
                         "unit": unit.get("name"),
@@ -101,17 +104,18 @@ def main() -> int:
 
     total = sum(counts.values())
     found = sum(counts[k] for k in FOUND)
+    absent = sum(counts[k] for k in ABSENT)
     if a.json:
-        print(json.dumps({"checked": total, "found": found, "counts": counts, "units_without_source_path": no_path, "problems": problems}, indent=2))
+        print(json.dumps({"checked": total, "found": found, "absent": absent, "counts": counts, "units_without_source_path": no_path, "problems": problems}, indent=2))
     else:
-        print(f"{a.project}: {found} of {total} sampled functions found ({', '.join(f'{k} {v}' for k, v in counts.most_common())})")
+        print(f"{a.project}: {found} of {total} sampled functions found, {absent} not in the repository ({', '.join(f'{k} {v}' for k, v in counts.most_common())})")
         print(f"{no_path} of {len(units)} units have no source_path in the report")
         if problems:
             print("\nNot found:")
             for x in problems:
                 where = x["path"] or x["source_path"] or "(no source_path)"
                 print(f"  {x['unit']}  {x['function']}  [{x['kind']}]  {where}" + (f"  {x['error']}" if x["error"] else ""))
-    return 0 if found == total else 1
+    return 0 if found + absent == total else 1
 
 
 if __name__ == "__main__":
