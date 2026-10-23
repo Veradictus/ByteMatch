@@ -234,3 +234,38 @@ describe("loadSource and renamed functions", () => {
     }
   });
 });
+
+describe("loadSource and the repository's alias index", () => {
+  it("finds renames in any header and in linker scripts, wherever they are", async () => {
+    const { vi } = await import("vitest");
+    const { resetConfig } = await import("./config");
+    const repo: Record<string, string> = {
+      "src/overlay/help_00238000.c":
+        '#include "local.h"\n\nvoid Hero_Physics(void) {\n}\n\nint __divdi3(int a, int b) {\n    return a / b;\n}\n',
+      "src/overlay/local.h": "/* nothing about names here */\n",
+      "config/generated/names.h": "#define Hero_Physics   func_L12_00238FF0   /* level 12 copy */\n",
+      "rac.ld.sh": "SECTIONS {\n  func_0011DFE8 = __divdi3;\n}\n",
+    };
+    vi.stubGlobal("fetch", async (input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("/git/trees/")) {
+        const tree = Object.entries(repo).map(([path, t]) => ({ path, type: "blob", size: t.length }));
+        return Response.json({ sha: "abc", tree, truncated: false });
+      }
+      const path = decodeURIComponent(url.split("/").slice(6).join("/"));
+      return repo[path] !== undefined ? new Response(repo[path]) : new Response("", { status: 404 });
+    });
+    process.env.GITHUB_TOKEN = "test";
+    resetConfig();
+    try {
+      const { loadSource } = await import("./source-fetch");
+      const p = { owner: "o", repo: "idx", installationId: null };
+      expect(await loadSource(p, "abc", "src/overlay/help_00238000.c", "func_L12_00238FF0")).toMatchObject({ kind: "c", start: 3, end: 4 });
+      expect(await loadSource(p, "abc", "src/overlay/help_00238000.c", "func_0011DFE8")).toMatchObject({ kind: "c", start: 6, end: 8 });
+    } finally {
+      delete process.env.GITHUB_TOKEN;
+      resetConfig();
+      vi.unstubAllGlobals();
+    }
+  });
+});

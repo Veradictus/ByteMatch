@@ -40,7 +40,8 @@ class ByteCache {
 
 const files = new ByteCache(64_000_000);
 const listings = new Map<string, string[] | null>();
-const trees = new Map<string, string[] | null>();
+const trees = new Map<string, { path: string; size: number }[] | null>();
+const aliasIndexes = new Map<string, Promise<Map<string, string[]> | null>>();
 const searches = new Map<string, string[]>();
 const SEARCHES_PER_MINUTE = 8;
 const searchTimes: number[] = [];
@@ -113,9 +114,15 @@ async function listDir(p: Repo, sha: string, path: string): Promise<string[] | n
 
 /** Every source file in the repository at SHA (one request); null when GitHub won't say. */
 async function treeAt(p: Repo, sha: string): Promise<string[] | null> {
+  const all = await blobsAt(p, sha);
+  return all ? all.filter((b) => SOURCE_EXT.test(b.path)).map((b) => b.path) : null;
+}
+
+/** Every file in the repository at SHA with its size (one request); null when GitHub won't say. */
+async function blobsAt(p: Repo, sha: string): Promise<{ path: string; size: number }[] | null> {
   const key = repoKey(p, sha);
   if (trees.has(key)) return trees.get(key)!;
-  let out: string[] | null = null;
+  let out: { path: string; size: number }[] | null = null;
   try {
     const { octokit } = await repoClient(p);
     const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
@@ -124,7 +131,7 @@ async function treeAt(p: Repo, sha: string): Promise<string[] | null> {
       tree_sha: sha,
       recursive: "1",
     });
-    out = data.tree.filter((e) => e.type === "blob" && e.path && SOURCE_EXT.test(e.path)).map((e) => e.path!);
+    out = data.tree.filter((e) => e.type === "blob" && e.path).map((e) => ({ path: e.path!, size: e.size ?? 0 }));
   } catch {
     out = null;
   }
@@ -214,8 +221,9 @@ async function macroAliases(p: Repo, sha: string, texts: [string, string][], nam
   const define = new RegExp(`^\\s*#\\s*define\\s+([A-Za-z_]\\w*)\\s+(?:${wanted})\\s*(?:$|//|/\\*)`, "gm");
   const found = new Set<string>();
   const seen = new Set<string>();
+  let read = 0;
   let queue = texts;
-  for (let depth = 0; depth < 4 && queue.length && seen.size < MAX_HEADERS; depth++) {
+  for (let depth = 0; depth < 4 && queue.length && read < MAX_HEADERS; depth++) {
     // Every include of this level at once, each tried beside its file and under the include folders.
     const wantedIncludes: string[][] = [];
     for (const [path, text] of queue) {
@@ -225,24 +233,84 @@ async function macroAliases(p: Repo, sha: string, texts: [string, string][], nam
         const tries = [dir, ...INCLUDE_DIRS]
           .map((root) => cleanSourcePath(root ? `${root}/${inc[1]}` : inc[1]))
           .filter((c): c is string => !!c && !seen.has(c));
-        if (!tries.length || seen.size >= MAX_HEADERS) continue;
+        if (!tries.length) continue;
         for (const c of tries) seen.add(c);
         wantedIncludes.push(tries);
       }
     }
     const next = (
       await Promise.all(
-        wantedIncludes.map(async (tries) => {
+        // Only headers that exist count toward the limit, not every place one was looked for.
+        wantedIncludes.slice(0, MAX_HEADERS - read).map(async (tries) => {
           const texts = await Promise.all(tries.map((c) => fileAt(p, sha, c)));
           const i = texts.findIndex((t) => t !== null);
           return i < 0 ? null : ([tries[i], texts[i]!] as [string, string]);
         }),
       )
     ).filter((x): x is [string, string] => x !== null);
+    read += next.length;
     queue = next;
   }
   for (const n of names) found.delete(n);
   return [...found];
+}
+
+// The files an alias index reads: headers and linker scripts, outside build output and assembly dumps.
+const HEADER = /\.(h|hh|hpp|hxx|inc|inl)$/i;
+const LINKER = /(\.(ld|lds|lcf|x)$|\.ld\.[a-z]+$|(^|\/)[^/]*linker[^/]*$)/i;
+const SKIP_DIRS = /(^|\/)(build|out|expected|asm|nonmatchings?|matchings?|\.git|node_modules|tools\/[^/]*\/(tests?|vendor))(\/|$)/i;
+const INDEX_MAX_FILES = 800;
+const INDEX_MAX_BYTES = 32_000_000;
+
+/**
+ * Other names the source gives symbols, across the whole repository at SHA: object-like macros
+ * (`#define Hero_Update func_0023BBE8`, for projects that rename functions without renaming the
+ * symbols their build emits) and linker-script assignments (`func_0011DFE8 = __divdi3;`). Symbol
+ * → names. Built once per commit from every header and linker script, so it doesn't matter how a
+ * project lays out its includes; null when the repository's file list can't be read.
+ */
+function aliasIndex(p: Repo, sha: string): Promise<Map<string, string[]> | null> {
+  const key = repoKey(p, sha);
+  let pending = aliasIndexes.get(key);
+  if (!pending) {
+    pending = buildAliasIndex(p, sha);
+    if (aliasIndexes.size > 50) aliasIndexes.clear();
+    aliasIndexes.set(key, pending);
+  }
+  return pending;
+}
+
+async function buildAliasIndex(p: Repo, sha: string): Promise<Map<string, string[]> | null> {
+  const blobs = await blobsAt(p, sha);
+  if (!blobs) return null;
+  const wanted = blobs
+    .filter((b) => (HEADER.test(b.path) || LINKER.test(b.path)) && !SKIP_DIRS.test(b.path) && b.size <= MAX_FILE)
+    // Headers in include folders first: that's where rename lists live.
+    .sort((a, b) => Number(!/(^|\/)inc(lude)?\//i.test(a.path)) - Number(!/(^|\/)inc(lude)?\//i.test(b.path)) || a.size - b.size);
+  const picked: string[] = [];
+  let bytes = 0;
+  for (const b of wanted) {
+    if (picked.length >= INDEX_MAX_FILES || bytes + b.size > INDEX_MAX_BYTES) break;
+    picked.push(b.path);
+    bytes += b.size;
+  }
+  const index = new Map<string, string[]>();
+  const add = (symbol: string, name: string) => {
+    if (symbol === name) return;
+    const list = index.get(symbol) ?? [];
+    if (!list.includes(name)) index.set(symbol, [...list, name]);
+  };
+  const define = /^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)[ \t]+([A-Za-z_]\w*)[ \t]*(?:$|\/\/|\/\*)/gm;
+  const assign = /^[ \t]*([A-Za-z_.$][\w.$]*)[ \t]*=[ \t]*([A-Za-z_.$][\w.$]*)[ \t]*;/gm;
+  for (let i = 0; i < picked.length; i += 16) {
+    const texts = await Promise.all(picked.slice(i, i + 16).map((path) => fileAt(p, sha, path).catch(() => null)));
+    texts.forEach((text, j) => {
+      if (!text) return;
+      for (const m of text.matchAll(define)) add(m[2], m[1]);
+      if (LINKER.test(picked[i + j])) for (const m of text.matchAll(assign)) add(m[1], m[2]);
+    });
+  }
+  return index;
 }
 
 const escapeName = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -369,6 +437,30 @@ export async function loadSource(
   /** Files code search finds the function's name in, minus those already read. */
   const searched = async (except: string[]) => (fn ? (await searchFiles(p, names[0] ?? fn)).filter((f) => !except.includes(f)) : []);
 
+  /** The function under another name the source gives its symbol (see aliasIndex), looked for in FILES. */
+  const viaMacros = async (files: [string, string][]): Promise<SourceView | null> => {
+    if (!fn || !files.length) return null;
+    const wanted = names.length ? names : [fn];
+    const index = await aliasIndex(p, sha);
+    // Without the repository's file list (no access to its tree), the headers the files include.
+    const aliases = index ? [...new Set(wanted.flatMap((n) => index.get(n) ?? []))] : await macroAliases(p, sha, files, wanted);
+    if (!aliases.length) return null;
+    for (const [f, t] of files) {
+      const found = findFunction(t, aliases, address);
+      if (found) return view(p, sha, f, t, found, fn);
+    }
+    // Defined somewhere other than the unit's files: look for the C name with code search.
+    const known = new Set(files.map(([f]) => f));
+    for (const alias of aliases.slice(0, 2)) {
+      for (const f of (await searchFiles(p, alias)).filter((x) => !known.has(x)).slice(0, 6)) {
+        const t = await fileAt(p, sha, f);
+        const found = t === null ? null : findFunction(t, aliases, address);
+        if (found) return view(p, sha, f, t!, found, fn);
+      }
+    }
+    return null;
+  };
+
   const path = cleanSourcePath(sourcePath);
   if (!path) {
     // No source_path: the unit's name against the repository's files.
@@ -385,22 +477,15 @@ export async function loadSource(
       `unit:${hints.unit}`,
     );
     if (found) return found;
+    const guessed = (await Promise.all(guesses.map(async (g) => [g, await fileAt(p, sha, g)] as const))).filter(
+      (x): x is [string, string] => x[1] !== null,
+    );
+    const aliased = await viaMacros(guessed);
+    if (aliased) return aliased;
     const first = guesses[0];
     const text = first ? await fileAt(p, sha, first) : null;
     return first && text !== null ? view(p, sha, first, text, null, fn) : null;
   }
-
-  /** The function under a name a header gives it with #define, looked for in FILES. */
-  const viaMacros = async (files: [string, string][]): Promise<SourceView | null> => {
-    if (!fn || !files.length) return null;
-    const aliases = await macroAliases(p, sha, files, names.length ? names : [fn]);
-    if (!aliases.length) return null;
-    for (const [f, t] of files) {
-      const found = findFunction(t, aliases, address);
-      if (found) return view(p, sha, f, t, found, fn);
-    }
-    return null;
-  };
 
   const text = await fileAt(p, sha, path);
   if (text !== null) {
@@ -430,12 +515,17 @@ export async function loadSource(
   const order = known ? [known, ...dir.filter((d) => d !== known)] : candidates(dir, fn);
   const found = await firstHolding(order, path);
   if (found) return found;
-  // Renamed by a macro: the headers the directory's files include say what to look for. The first
-  // file's includes are the project's usual ones; the rest are read only if needed.
-  const firstFiles = (await Promise.all(order.slice(0, 12).map(async (f) => [f, await fileAt(p, sha, f)] as const))).filter(
-    (x): x is [string, string] => x[1] !== null,
-  );
-  const aliased = await viaMacros(firstFiles);
+  // Renamed: look for the name the source gives the symbol in the folder's files (read already).
+  let budget = MAX_DIR_BYTES;
+  const dirFiles: [string, string][] = [];
+  for (const f of order) {
+    const t = await fileAt(p, sha, f);
+    if (t === null) continue;
+    budget -= t.length;
+    dirFiles.push([f, t]);
+    if (budget <= 0) break;
+  }
+  const aliased = await viaMacros(dirFiles);
   if (aliased) return aliased;
   const searchedFound = await firstHolding(await searched(dir), path);
   if (searchedFound) return searchedFound;
