@@ -45,10 +45,27 @@ export function maskNonCode(text: string): string {
   return out.join("");
 }
 
+/** A file's line starts and lines, kept for the last file asked about (indexing asks thousands of times per file). */
+let lastTable: { text: string; starts: number[]; lines: string[] } | null = null;
+function lineTable(text: string) {
+  if (lastTable?.text === text) return lastTable;
+  const starts = [0];
+  for (let i = text.indexOf("\n"); i >= 0; i = text.indexOf("\n", i + 1)) starts.push(i + 1);
+  lastTable = { text, starts, lines: text.split("\n") };
+  return lastTable;
+}
+
+/** The 1-based line of a position in TEXT. */
 const lineOf = (text: string, index: number) => {
-  let n = 1;
-  for (let i = 0; i < index; i++) if (text.charCodeAt(i) === 10) n++;
-  return n;
+  const { starts } = lineTable(text);
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= index) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo + 1;
 };
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -115,7 +132,7 @@ function definitionRange(text: string, masked: string, nameAt: number, open: num
     else if (masked[k] === "}" && --depth === 0) break;
   }
   let start = lineOf(text, nameAt);
-  const lines = text.split("\n");
+  const { lines } = lineTable(text);
   // The return type and qualifiers may sit on the lines before the name.
   while (start > 1 && /^\s*[\w*&:<>,\s]+$/.test(lines[start - 2]) && lines[start - 2].trim() && !/[;{}]\s*$/.test(lines[start - 2]))
     start--;
@@ -251,6 +268,122 @@ export function findFunction(text: string, names: string | string[], address?: n
     if (at >= 0) return { kind: "asm", start: at + 1, end: at + 1 };
   }
   return null;
+}
+
+// ---- Indexing a whole file ----
+
+/** A function found in a file: where it is and whether it's C or still assembly. */
+export interface Definition {
+  name: string;
+  start: number;
+  end: number;
+  kind: "c" | "asm";
+}
+
+/** What a file says about functions: their definitions, and addresses its comments give them. */
+export interface FileFacts {
+  definitions: Definition[];
+  /** Address → the name of the definition its comment sits over. */
+  addresses: [number, string][];
+}
+
+const ASM_FILE = /\.(s|asm)$/i;
+const FUNC_START =
+  /^\s*(?:glabel|thumb_func_start|arm_func_start|non_word_aligned_thumb_func_start|nonmatching|\.ent|\.func|leaf|nonleaf)\s+([A-Za-z_.$][\w.$]*)/;
+const TYPE_FUNC = /^\s*\.type\s+([A-Za-z_.$][\w.$]*)\s*,\s*[%@#]?(function|STT_FUNC)/;
+const COL0_LABEL = /^([A-Za-z_$][\w.$]*):/;
+/** objdump's listing form: `002e1be0 <_ZN6GSFadeC1Ev>:`. */
+const DUMP_LABEL = /^[0-9a-fA-F]+\s+<([^>+]+)>:\s*$/;
+const LOCAL_LABEL = /^(\.L|L_?\d|\$|_?jtbl_|jumptable|\.)/i;
+
+/**
+ * Every function a file defines or still holds as assembly, in one pass, for a repository-wide
+ * index: C and C++ definitions outside function bodies, the symbols of all-caps assembly-include
+ * macros (INCLUDE_ASM and kin), labels in top-level asm() blocks, and, in assembly files, each
+ * function's label up to the next one. Comments carrying an address are tied to the definition
+ * under them.
+ */
+export function fileFacts(text: string, path: string): FileFacts {
+  const definitions: Definition[] = [];
+  const addresses: [number, string][] = [];
+  const lines = text.split("\n");
+  if (ASM_FILE.test(path)) {
+    const starts = new Map<string, number>();
+    lines.forEach((l, i) => {
+      const m = FUNC_START.exec(l) ?? TYPE_FUNC.exec(l) ?? COL0_LABEL.exec(l) ?? DUMP_LABEL.exec(l);
+      const name = m?.[1];
+      if (name && !LOCAL_LABEL.test(name) && !starts.has(name)) starts.set(name, i + 1);
+    });
+    // A file named after one symbol (asm/app/_ZN6GSFadeC1Ev.s) is that function's, header comment and all.
+    const own = path
+      .split("/")
+      .pop()!
+      .replace(/\.[^.]+$/, "");
+    if (starts.has(own) && starts.size === 1) starts.set(own, 1);
+    const ordered = [...starts].sort((a, b) => a[1] - b[1]);
+    ordered.forEach(([name, start], i) => {
+      const end = i + 1 < ordered.length ? Math.max(start, ordered[i + 1][1] - 1) : lines.length;
+      definitions.push({ name, start, end, kind: "asm" });
+    });
+    return { definitions, addresses };
+  }
+  const masked = maskNonCode(text);
+  const depthAt = bodyDepths(masked);
+  const re = /(?<![\w.>~])(~?[A-Za-z_][\w:~]*)\s*\(/g;
+  for (let m = re.exec(masked); m; m = re.exec(masked)) {
+    if (depthAt(m.index) !== 0) continue;
+    const name = m[1];
+    if (/^(if|for|while|switch|return|sizeof|__attribute__|__asm__|__asm|asm|defined)$/.test(name)) continue;
+    const r = definitionRange(text, masked, m.index, m.index + m[0].length - 1);
+    if (r) definitions.push({ name, ...r, kind: "c" });
+  }
+  // Assembly kept in place: asm("...") blocks naming labels, and include macros naming symbols.
+  const block = /\b(?:__asm__|__asm|asm)\s*(?:volatile\s*|__volatile__\s*)?\(/g;
+  for (let m = block.exec(masked); m; m = block.exec(masked)) {
+    if (depthAt(m.index) !== 0) continue;
+    let depth = 0;
+    let i = m.index + m[0].length - 1;
+    for (; i < masked.length; i++) {
+      if (masked[i] === "(") depth++;
+      else if (masked[i] === ")" && --depth === 0) break;
+    }
+    const body = text.slice(m.index, i);
+    const start = lineOf(text, m.index);
+    const end = lineOf(text, i);
+    for (const l of body.matchAll(/(?:\.glob(?:a)?l\s+|glabel\s+)([A-Za-z_.$][\w.$]*)|(?:^|[\s"\\n])([A-Za-z_$][\w.$]*):/g)) {
+      const name = l[1] ?? l[2];
+      if (name && !LOCAL_LABEL.test(name)) definitions.push({ name, start, end, kind: "asm" });
+    }
+  }
+  lines.forEach((l, i) => {
+    const m = /^\s*(?:#\s*pragma\s+)?[A-Z][A-Z0-9_]*\s*\((.*)\)\s*;?\s*$/.exec(l);
+    if (!m) return;
+    const args = m[1].replace(/"(?:\\.|[^"\\])*"/g, " ");
+    for (const id of args.match(/[A-Za-z_][\w.$]*/g) ?? []) {
+      if (!/^[A-Z0-9_]+$/.test(id)) definitions.push({ name: id, start: i + 1, end: i + 1, kind: "asm" });
+    }
+  });
+  // Address comments: the definition starting within a dozen lines under one.
+  const marker = /(?:\/\/|\/\*|^\s*\*|#).*?\b0x([0-9a-fA-F]{5,8})\b/;
+  const cdefs = definitions.filter((d) => d.kind === "c").sort((a, b) => a.start - b.start);
+  lines.forEach((l, i) => {
+    const m = marker.exec(l);
+    if (!m) return;
+    const d =
+      cdefs.find((x) => x.start >= i + 1 && x.start <= i + 13) ?? cdefs.find((x) => x.start <= i + 1 && x.end >= i + 1 && x.start >= i - 1);
+    if (d) addresses.push([parseInt(m[1], 16), d.name]);
+  });
+  return { definitions, addresses };
+}
+
+/** Other names a header or linker script gives symbols: `#define NEW sym`, and `sym = name;` in linker scripts. */
+export function fileAliases(text: string, linker: boolean): [string, string][] {
+  const out: [string, string][] = [];
+  for (const m of text.matchAll(/^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)[ \t]+([A-Za-z_]\w*)[ \t]*(?:$|\/\/|\/\*)/gm))
+    out.push([m[2], m[1]]);
+  if (linker)
+    for (const m of text.matchAll(/^[ \t]*([A-Za-z_.$][\w.$]*)[ \t]*=[ \t]*([A-Za-z_.$][\w.$]*)[ \t]*;/gm)) out.push([m[1], m[2]]);
+  return out;
 }
 
 /** A source path from a report, if it's safe to ask a repository for: relative, no "..". */

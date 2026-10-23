@@ -269,3 +269,91 @@ describe("loadSource and the repository's alias index", () => {
     }
   });
 });
+
+/** A gzipped tarball as GitHub serves one, every file under a top folder. */
+async function tarball(files: Record<string, string>): Promise<Uint8Array> {
+  const { gzipSync } = await import("node:zlib");
+  const enc = new TextEncoder();
+  const blocks: Uint8Array[] = [];
+  for (const [path, text] of Object.entries(files)) {
+    const body = enc.encode(text);
+    const h = new Uint8Array(512);
+    h.set(enc.encode(`repo-abc/${path}`).subarray(0, 100), 0);
+    h.set(enc.encode(body.length.toString(8).padStart(11, "0")), 124);
+    h[156] = "0".charCodeAt(0);
+    blocks.push(h, body, new Uint8Array((512 - (body.length % 512)) % 512));
+  }
+  blocks.push(new Uint8Array(1024));
+  const all = new Uint8Array(blocks.reduce((n, b) => n + b.length, 0));
+  let off = 0;
+  for (const b of blocks) {
+    all.set(b, off);
+    off += b.length;
+  }
+  return gzipSync(all);
+}
+
+describe("fileFacts", () => {
+  it("lists C definitions, include lines, asm labels and address comments", async () => {
+    const { fileFacts } = await import("./source");
+    const c = fileFacts(
+      'void a(void) { b(); }\nINCLUDE_ASM("asm/nonmatchings/x", func_00100000);\n// FUNCTION: GAME 0x00100200\nint Renamed(int x) {\n    return x;\n}\n',
+      "src/x.c",
+    );
+    expect(c.definitions.map((d) => [d.name, d.kind, d.start, d.end])).toEqual([
+      ["a", "c", 1, 1],
+      ["Renamed", "c", 3, 6],
+      ["func_00100000", "asm", 2, 2],
+    ]);
+    expect(c.addresses).toEqual([[0x100200, "Renamed"]]);
+    const s = fileFacts(
+      "@ header\n\t.type _080002C4, %function\n_080002C4:\n\tpush {lr}\n.L1:\n\tbx lr\nglabel func_08000300\n\tnop\n",
+      "asm/agbmain.s",
+    );
+    expect(s.definitions.map((d) => [d.name, d.start, d.end])).toEqual([
+      ["_080002C4", 2, 6],
+      ["func_08000300", 7, 9],
+    ]);
+    const dump = fileFacts(
+      "/* _ZN6GSFadeC1Ev\n * GSFade::GSFade()\n */\n\n002e1be0 <_ZN6GSFadeC1Ev>:\n  2e1be0:\t4a04\tldr r2\n",
+      "asm/app/_ZN6GSFadeC1Ev.s",
+    );
+    expect(dump.definitions.map((d) => [d.name, d.start, d.end])).toEqual([["_ZN6GSFadeC1Ev", 1, 7]]);
+  });
+});
+
+describe("loadSource through the repository index", () => {
+  it("finds functions anywhere in the repository and says when one is nowhere", async () => {
+    const { vi } = await import("vitest");
+    const archive = await tarball({
+      "src/other/place.c": '#include "names.h"\n\nvoid Hero_Physics(void) {\n}\n',
+      "include/names.h": "#define Hero_Physics func_00238FF0\n",
+      "asm/code_08000.s": "glabel func_08000000\n\tnop\n",
+      "src/calls.c": "extern void func_00999999(void);\nvoid caller(void) { func_00999999(); }\n",
+    });
+    const repo: Record<string, string> = {};
+    for (const [path, body] of (await import("./source-fetch")).tarEntries((await import("node:zlib")).gunzipSync(archive)))
+      repo[path] = new TextDecoder().decode(body);
+    vi.stubGlobal("fetch", async (input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith("https://codeload.github.com/")) return new Response(new Blob([archive as BlobPart]));
+      const path = decodeURIComponent(url.split("/").slice(6).join("/"));
+      return repo[path] !== undefined ? new Response(repo[path]) : new Response("", { status: 404 });
+    });
+    try {
+      const { loadSource } = await import("./source-fetch");
+      const p = { owner: "o", repo: "tarred", installationId: null };
+      // The unit's source_path points somewhere else entirely; the index doesn't care.
+      expect(await loadSource(p, "abc", "src/wrong/path.c", "func_00238FF0")).toMatchObject({
+        kind: "c",
+        path: "src/other/place.c",
+        start: 3,
+      });
+      expect(await loadSource(p, "abc", null, "func_08000000", { unit: "code" })).toMatchObject({ kind: "asm", path: "asm/code_08000.s" });
+      // Only called and declared, never defined: there's no code to show.
+      expect(await loadSource(p, "abc", "src/calls.c", "func_00999999")).toMatchObject({ kind: "absent" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

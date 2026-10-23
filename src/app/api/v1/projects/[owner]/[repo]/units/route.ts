@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { latestFullReport, loadFunctionalList, loadReport } from "@/db/store";
 import { NotFound, resolve } from "@/lib/project-data";
+import { warmSourceIndex } from "@/lib/source-fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ owner: 
     const [report, functional] = row ? await Promise.all([loadReport(row), loadFunctionalList(row)]) : [null, null];
     const unit = report?.units.find((u) => u.name === q.get("unit"));
     if (!unit) throw new NotFound("Unit not found");
+    // Someone opened this unit: get the repository's source index ready for the function they pick next.
+    if (row) warmSourceIndex(r.project, row.commitSha);
     return Response.json(
       {
         name: unit.name,

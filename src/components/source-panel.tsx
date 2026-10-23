@@ -8,7 +8,7 @@ import { Close } from "./ui/icons";
 interface SourceView {
   path: string;
   url: string;
-  kind: "c" | "asm" | "file" | "not-found" | "directory";
+  kind: "c" | "asm" | "file" | "not-found" | "absent" | "directory";
   start: number;
   end: number;
   lines: number;
@@ -152,6 +152,15 @@ export function SourcePanel({
             ))}
           </ul>
         </div>
+      ) : v?.kind === "absent" ? (
+        <p className="px-4 py-6 text-sm text-ink-3">
+          {fn} isn&apos;t in the repository at this commit: no file defines it or includes it as assembly. Projects whose assembly is
+          generated from the game at build time only commit a function once it&apos;s decompiled, so there&apos;s no code to show yet.{" "}
+          <a href={v.url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+            Browse the repository
+          </a>
+          .
+        </p>
       ) : v?.kind === "not-found" ? (
         <p className="px-4 py-6 text-sm text-ink-3">
           {fn ? `Couldn't find ${fn} in ${v.path} at this commit.` : `Nothing to show in ${v.path}.`}{" "}

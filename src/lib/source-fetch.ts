@@ -1,6 +1,16 @@
 import type { Project } from "../db/schema";
 import { repoClient } from "../github/client";
-import { addressInName, cleanSourcePath, findFunction, functionNames, type FoundFunction } from "./source";
+import { gunzipSync } from "node:zlib";
+import {
+  addressInName,
+  cleanSourcePath,
+  fileAliases,
+  fileFacts,
+  findFunction,
+  functionNames,
+  type Definition,
+  type FoundFunction,
+} from "./source";
 
 /**
  * A project's source, read from GitHub at the commit a report came from. Files at a commit never
@@ -315,6 +325,236 @@ async function buildAliasIndex(p: Repo, sha: string): Promise<Map<string, string
 
 const escapeName = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// ---- The repository index: every function the repository defines, from one download ----
+
+export interface Located extends Definition {
+  path: string;
+}
+
+export interface SourceIndex {
+  /** Function name (plain and qualified) → where it's defined or included as assembly. */
+  byName: Map<string, Located[]>;
+  /** Address from comments → names. */
+  byAddress: Map<number, string[]>;
+  /** Symbol → other names the source gives it (#define, linker scripts). */
+  aliases: Map<string, string[]>;
+}
+
+/** Past this the repository holds more than code (assets, builds): index it file by file instead. */
+const MAX_ARCHIVE = 80_000_000;
+const MAX_UNPACKED = 600_000_000;
+const sourceIndexes = new Map<string, Promise<SourceIndex | null>>();
+/** The newest built index per repository, whatever its commit: a guide while a newer commit's builds. */
+const latestBuilt = new Map<string, { sha: string; index: SourceIndex }>();
+
+/** The repository at SHA as a gzipped tarball: the public download, else through the API. */
+async function archiveAt(p: Repo, sha: string): Promise<Uint8Array | null> {
+  const pub = await fetch(`https://codeload.github.com/${p.owner}/${p.repo}/tar.gz/${sha}`, {
+    signal: AbortSignal.timeout(60_000),
+  }).catch(() => null);
+  if (pub?.ok && pub.body) {
+    if (Number(pub.headers.get("content-length") ?? 0) > MAX_ARCHIVE) return null;
+    // Read as it arrives, giving up as soon as it's too big rather than after downloading it all.
+    const reader = pub.body.getReader();
+    const parts: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > MAX_ARCHIVE) {
+        await reader.cancel();
+        return null;
+      }
+      parts.push(value);
+    }
+    const buf = new Uint8Array(size);
+    let off = 0;
+    for (const part of parts) {
+      buf.set(part, off);
+      off += part.length;
+    }
+    return buf;
+  }
+  try {
+    const { octokit } = await repoClient(p);
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/tarball/{ref}", { owner: p.owner, repo: p.repo, ref: sha });
+    const buf = new Uint8Array(data as ArrayBuffer);
+    return buf.length > MAX_ARCHIVE ? null : buf;
+  } catch {
+    return null;
+  }
+}
+
+/** The files in a tarball, path (without GitHub's top folder) → bytes; pax and GNU long names included. */
+export function* tarEntries(tar: Uint8Array): Generator<[string, Uint8Array]> {
+  const dec = new TextDecoder();
+  const str = (b: Uint8Array) => {
+    const z = b.indexOf(0);
+    return dec.decode(z < 0 ? b : b.subarray(0, z));
+  };
+  let longName: string | null = null;
+  for (let off = 0; off + 512 <= tar.length;) {
+    const h = tar.subarray(off, off + 512);
+    if (h.every((b) => b === 0)) break;
+    const size = parseInt(str(h.subarray(124, 136)).trim() || "0", 8);
+    const type = String.fromCharCode(h[156] || 48);
+    const body = tar.subarray(off + 512, off + 512 + size);
+    off += 512 + Math.ceil(size / 512) * 512;
+    if (type === "x") {
+      const path = /\d+ path=([^\n]*)\n/.exec(dec.decode(body))?.[1];
+      if (path) longName = path;
+      continue;
+    }
+    if (type === "L") {
+      longName = str(body);
+      continue;
+    }
+    if (type === "g") continue;
+    const prefix = str(h.subarray(345, 500));
+    const name = longName ?? (prefix ? `${prefix}/${str(h.subarray(0, 100))}` : str(h.subarray(0, 100)));
+    longName = null;
+    if (type !== "0" && type !== "\0") continue;
+    yield [name.slice(name.indexOf("/") + 1), body];
+  }
+}
+
+const INDEXED = /\.(c|cc|cpp|cxx|c\+\+|h|hh|hpp|hxx|inc|inl|s|asm)$/i;
+
+/**
+ * Every function the repository defines at SHA, found by name wherever it is, so a lookup
+ * doesn't depend on a unit's source_path or on how the project lays out its files. Built once per
+ * commit from the repository's tarball (a few megabytes for most decompilations); null when it
+ * can't be downloaded.
+ */
+export function sourceIndex(p: Repo, sha: string): Promise<SourceIndex | null> {
+  const key = repoKey(p, sha);
+  let pending = sourceIndexes.get(key);
+  if (!pending) {
+    pending = buildSourceIndex(p, sha)
+      .then((index) => {
+        if (index) {
+          const repo = `${p.owner}/${p.repo}`.toLowerCase();
+          latestBuilt.delete(repo);
+          latestBuilt.set(repo, { sha, index });
+          if (latestBuilt.size > 16) latestBuilt.delete(latestBuilt.keys().next().value!);
+        }
+        return index;
+      })
+      .catch((e) => {
+        console.error("source index", key, e);
+        return null;
+      });
+    if (sourceIndexes.size >= 8) sourceIndexes.delete(sourceIndexes.keys().next().value!);
+    sourceIndexes.set(key, pending);
+  }
+  return pending;
+}
+
+async function buildSourceIndex(p: Repo, sha: string): Promise<SourceIndex | null> {
+  const archive = await archiveAt(p, sha);
+  if (!archive) return null;
+  let tar: Uint8Array;
+  try {
+    tar = gunzipSync(archive, { maxOutputLength: MAX_UNPACKED });
+  } catch {
+    return null;
+  }
+  const byName = new Map<string, Located[]>();
+  const byAddress = new Map<number, string[]>();
+  const aliases = new Map<string, string[]>();
+  const push = <K, V>(m: Map<K, V[]>, k: K, v: V) => {
+    const list = m.get(k);
+    if (list) list.push(v);
+    else m.set(k, [v]);
+  };
+  const dec = new TextDecoder();
+  for (const [path, bytes] of tarEntries(tar)) {
+    const linker = LINKER.test(path);
+    if (!(INDEXED.test(path) || linker) || SKIP_BUILD.test(path) || bytes.length > MAX_FILE) continue;
+    const text = dec.decode(bytes);
+    // Either side of a #define may be the report's name: a rename header says `#define Readable sym`,
+    // a names header generated from a project's table may say `#define report_name source_name`.
+    if (HEADER.test(path) || linker)
+      for (const [sym, name] of fileAliases(text, linker)) {
+        if (sym === name) continue;
+        push(aliases, sym, name);
+        push(aliases, name, sym);
+      }
+    if (linker) continue;
+    const facts = fileFacts(text, path);
+    for (const d of facts.definitions) {
+      const at: Located = { ...d, path };
+      push(byName, d.name, at);
+      const plain = d.name.split("::").pop()!;
+      if (plain !== d.name) push(byName, plain, at);
+    }
+    for (const [address, name] of facts.addresses) push(byAddress, address, name);
+    // The files themselves are what lookups read next: keep them instead of downloading again.
+    if (text.length <= 2_000_000) files.set(`${repoKey(p, sha)}:${path}`, text);
+  }
+  return { byName, byAddress, aliases };
+}
+
+/** Whether GitHub has the commit; null when it can't say (no access, or an error). */
+export async function commitExists(p: Repo, sha: string): Promise<boolean | null> {
+  try {
+    const { octokit } = await repoClient(p);
+    await octokit.request("GET /repos/{owner}/{repo}/commits/{ref}", { owner: p.owner, repo: p.repo, ref: sha });
+    return true;
+  } catch (e) {
+    const status = (e as { status?: number }).status;
+    return status === 404 || status === 422 ? false : null;
+  }
+}
+
+/** Starts building the index for a commit in the background (opening a unit does, before a function is picked). */
+export function warmSourceIndex(p: Repo, sha: string) {
+  void sourceIndex(p, sha);
+}
+
+/** Build output and generated trees: their copies of functions would compete with the source's. */
+const SKIP_BUILD = /(^|\/)(build|out|\.git|node_modules)(\/|$)/i;
+
+/**
+ * Where the index says the function is: by its names, then by the names the source gives its
+ * symbol, then by an address comment. Among several places, the one inside the unit's
+ * source_path wins, then one in a file named after the unit, then C over assembly.
+ */
+function locate(
+  index: SourceIndex,
+  names: string[],
+  address: number | null | undefined,
+  where: { path: string | null; unit?: string },
+): Located | null {
+  const pick = (list: Located[]): Located | null => {
+    if (!list.length) return null;
+    const unitTail = where.unit?.split("/").pop()?.toLowerCase();
+    const score = (l: Located) =>
+      (where.path && (l.path === where.path || l.path.startsWith(`${where.path}/`)) ? 8 : 0) +
+      (unitTail &&
+      l.path
+        .toLowerCase()
+        .replace(/\.[^./]+$/, "")
+        .endsWith(unitTail)
+        ? 4
+        : 0) +
+      (l.kind === "c" ? 2 : 0) +
+      (l.end > l.start ? 1 : 0);
+    return [...list].sort((a, b) => score(b) - score(a) || a.path.length - b.path.length)[0];
+  };
+  const direct = names.flatMap((n) => index.byName.get(n) ?? []);
+  const found = pick(direct.filter((l) => l.kind === "c")) ?? null;
+  if (found) return found;
+  const renamed = [...new Set(names.flatMap((n) => index.aliases.get(n) ?? []))].flatMap((n) => index.byName.get(n) ?? []);
+  const viaAlias = pick(renamed.filter((l) => l.kind === "c"));
+  if (viaAlias) return viaAlias;
+  const viaAddress = address ? pick((index.byAddress.get(address) ?? []).flatMap((n) => index.byName.get(n) ?? [])) : null;
+  if (viaAddress) return viaAddress;
+  // Still assembly: an include line or label, the unit's own first.
+  return pick([...direct, ...renamed]);
+}
+
 /** What else the report says about a function, to find it by: its demangled name and address. */
 export interface FunctionHints {
   demangled?: string | null;
@@ -326,7 +566,11 @@ export interface SourceView {
   path: string;
   /** GitHub's page for it at the commit, with the lines if known. */
   url: string;
-  kind: "c" | "asm" | "file" | "not-found" | "directory";
+  /**
+   * not-found: the file was read but the function isn't in it; absent: nothing in the whole
+   * repository defines it or includes it as assembly (code generated at build time, not committed).
+   */
+  kind: "c" | "asm" | "file" | "not-found" | "absent" | "directory";
   /** 1-based, inclusive: the lines `code` holds, out of the file's `lines`. */
   start: number;
   end: number;
@@ -398,18 +642,14 @@ export function candidates(paths: string[], fn: string): string[] {
   });
 }
 
-/**
- * A unit's source at SHA: the whole file, or one function in it. SOURCE_PATH is the report's
- * source_path for the unit, which may be a file or a directory; without one, the unit's own name
- * is matched against the repository's files. A function not where the report says is looked for
- * with GitHub's code search before giving up.
- */
-export async function loadSource(
+/** The lookup from the unit's own files outward (source_path, unit name, renames, code search). */
+async function lookupInFiles(
   p: Repo,
   sha: string,
   sourcePath: string | null | undefined,
   fn: string | null,
-  hints: FunctionHints & { unit?: string } = {},
+  hints: FunctionHints & { unit?: string },
+  allowSearch: boolean,
 ): Promise<SourceView | null> {
   const names = fn ? functionNames(fn, hints.demangled) : [];
   const address = hints.address ?? (fn ? addressInName(fn) : null);
@@ -435,7 +675,8 @@ export async function loadSource(
     return null;
   };
   /** Files code search finds the function's name in, minus those already read. */
-  const searched = async (except: string[]) => (fn ? (await searchFiles(p, names[0] ?? fn)).filter((f) => !except.includes(f)) : []);
+  const searched = async (except: string[]) =>
+    fn && allowSearch ? (await searchFiles(p, names[0] ?? fn)).filter((f) => !except.includes(f)) : [];
 
   /** The function under another name the source gives its symbol (see aliasIndex), looked for in FILES. */
   const viaMacros = async (files: [string, string][]): Promise<SourceView | null> => {
@@ -451,7 +692,7 @@ export async function loadSource(
     }
     // Defined somewhere other than the unit's files: look for the C name with code search.
     const known = new Set(files.map(([f]) => f));
-    for (const alias of aliases.slice(0, 2)) {
+    for (const alias of allowSearch ? aliases.slice(0, 2) : []) {
       for (const f of (await searchFiles(p, alias)).filter((x) => !known.has(x)).slice(0, 6)) {
         const t = await fileAt(p, sha, f);
         const found = t === null ? null : findFunction(t, aliases, address);
@@ -530,4 +771,64 @@ export async function loadSource(
   const searchedFound = await firstHolding(await searched(dir), path);
   if (searchedFound) return searchedFound;
   return { path, url: blob(p, sha, path).replace("/blob/", "/tree/"), kind: "not-found", start: 0, end: 0, lines: 0, code: "" };
+}
+
+/**
+ * A unit's source at SHA: the whole file, or one function in it. SOURCE_PATH is the report's
+ * source_path for the unit, which may be a file or a directory; without one, the unit's own name
+ * is matched against the repository's files. A function not where the report says is looked for
+ * with GitHub's code search before giving up.
+ */
+export async function loadSource(
+  p: Repo,
+  sha: string,
+  sourcePath: string | null | undefined,
+  fn: string | null,
+  hints: FunctionHints & { unit?: string } = {},
+): Promise<SourceView | null> {
+  if (!fn) return lookupInFiles(p, sha, sourcePath, null, hints, true);
+  const names = functionNames(fn, hints.demangled);
+  const wanted = names.length ? names : [fn];
+  const address = hints.address ?? addressInName(fn);
+  const where = { path: cleanSourcePath(sourcePath), unit: hints.unit };
+  const building = sourceIndex(p, sha);
+  // The unit's own files first: in a project that says where its units are, that's instant.
+  const quick = await lookupInFiles(p, sha, sourcePath, fn, hints, false);
+  if (quick && (quick.kind === "c" || quick.kind === "asm")) return quick;
+
+  // The whole repository, indexed once per commit: finds a function wherever and however it's written.
+  const fromIndex = async (index: SourceIndex, verify: boolean): Promise<SourceView | null> => {
+    const at = locate(index, wanted, address, where);
+    if (!at) return null;
+    const t = await fileAt(p, sha, at.path);
+    if (t === null) return null;
+    if (!verify) return view(p, sha, at.path, t, { kind: at.kind, start: at.start, end: at.end }, fn);
+    // An index from another commit only says which file: find the function in this commit's copy.
+    const names2 = [...wanted, ...wanted.flatMap((n) => index.aliases.get(n) ?? []), at.name];
+    const found = findFunction(t, names2, address);
+    return found ? view(p, sha, at.path, t, found, fn) : null;
+  };
+  let index = await Promise.race([building, new Promise<undefined>((ok) => setTimeout(() => ok(undefined), 2000))]);
+  if (index === undefined) {
+    const older = latestBuilt.get(`${p.owner}/${p.repo}`.toLowerCase());
+    const guided = older && older.sha !== sha ? await fromIndex(older.index, true) : null;
+    if (guided) return guided;
+    index = await building;
+  }
+  if (index) {
+    const found = await fromIndex(index, false);
+    if (found) return found;
+    const where2 = quick?.path ?? where.path ?? "";
+    return {
+      path: where2,
+      url: `https://github.com/${p.owner}/${p.repo}/tree/${sha}${where2 ? `/${where2.split("/").map(encodeURIComponent).join("/")}` : ""}`,
+      kind: "absent",
+      start: 0,
+      end: 0,
+      lines: 0,
+      code: "",
+    };
+  }
+  // No index (the download failed): the slower ways, code search included.
+  return lookupInFiles(p, sha, sourcePath, fn, hints, true);
 }

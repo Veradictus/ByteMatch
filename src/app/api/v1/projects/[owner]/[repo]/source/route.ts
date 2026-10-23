@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { latestFullReport, loadReport } from "@/db/store";
 import { NotFound, resolve } from "@/lib/project-data";
-import { loadSource } from "@/lib/source-fetch";
+import { commitExists, loadSource } from "@/lib/source-fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +33,11 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ owner: 
       demangled: f?.metadata?.demangled_name,
       address: Number(f?.metadata?.virtual_address) || null,
     });
+    if (!view && (await commitExists(r.project, row.commitSha)) === false)
+      return fail(
+        404,
+        `This report came from commit ${row.commitSha.slice(0, 7)}, which isn't in the repository on GitHub: it was built from a commit that was never pushed, or one later rebased away. Reports from pushed commits show their source.`,
+      );
     if (!view)
       return fail(
         404,
