@@ -6,6 +6,7 @@ export const PLATFORMS: Record<string, string> = {
   gbc: "Game Boy Color",
   gb: "Game Boy",
   gc: "GameCube",
+  md: "Mega Drive / Genesis",
   n64: "Nintendo 64",
   nds: "Nintendo DS",
   pc: "PC",
